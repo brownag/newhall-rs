@@ -78,15 +78,15 @@ fn compute_with_hemisphere(input: &SiteInput, hemisphere: Hemisphere) -> WaterBa
 
     let mut annual_rainfall = 0.0_f64;
     let mut annual_pet = 0.0_f64;
-    for i in 0..12 {
-        annual_rainfall += input.precip_mm[i];
-        annual_pet += mpe[i];
+    for (p, e) in input.precip_mm.iter().zip(mpe.iter()) {
+        annual_rainfall += p;
+        annual_pet += e;
     }
 
     let mut annual_water_balance = 0.0_f64;
-    for i in 0..12 {
-        annual_water_balance += input.precip_mm[i];
-        annual_water_balance -= mpe[i];
+    for (p, e) in input.precip_mm.iter().zip(mpe.iter()) {
+        annual_water_balance += p;
+        annual_water_balance -= e;
     }
 
     let summer_water_balance = compute_summer_water_balance(&input.precip_mm, &mpe, hemisphere);
@@ -140,11 +140,7 @@ fn compute_unadjusted_pet(temp_c: &[f64; 12]) -> [f64; 12] {
 }
 
 /// Applies NH (`INZ`/`RN`) or SH (`FS`/`RS`) latitude daylength correction to `upe`.
-fn apply_daylength_correction(
-    upe: &[f64; 12],
-    lat_dd: f64,
-    hemisphere: Hemisphere,
-) -> [f64; 12] {
+fn apply_daylength_correction(upe: &[f64; 12], lat_dd: f64, hemisphere: Hemisphere) -> [f64; 12] {
     let mut mpe = [0.0_f64; 12];
 
     match hemisphere {
@@ -294,7 +290,8 @@ mod tests {
         assert_close(wb_40_0.mpe[0], upe[0] * INZ[0][20]);
         assert_close(wb_40_0.mpe[6], upe[6] * INZ[6][20]);
         assert_close(wb_40_0.annual_rainfall, 600.0);
-        let expected_jja = (50.0 - wb_40_0.mpe[5]) + (50.0 - wb_40_0.mpe[6]) + (50.0 - wb_40_0.mpe[7]);
+        let expected_jja =
+            (50.0 - wb_40_0.mpe[5]) + (50.0 - wb_40_0.mpe[6]) + (50.0 - wb_40_0.mpe[7]);
         assert_close(wb_40_0.summer_water_balance, expected_jja);
     }
 
@@ -397,7 +394,9 @@ mod tests {
 
     #[test]
     fn freezing_temperatures_and_is_metric_noop() {
-        let cold_temps = [-10.0, -5.0, 0.0, -0.1, -2.0, 0.0, 0.0, -1.0, -3.0, -5.0, -8.0, -12.0];
+        let cold_temps = [
+            -10.0, -5.0, 0.0, -0.1, -2.0, 0.0, 0.0, -1.0, -3.0, -5.0, -8.0, -12.0,
+        ];
         let precip = [25.0; 12];
         let site = sample_site(45.0, cold_temps, precip);
 
@@ -409,7 +408,9 @@ mod tests {
         assert_close(wb.summer_water_balance, 75.0);
 
         // Defect #2: is_metric = false must produce identical outputs.
-        let mixed_temps = [-5.0, 0.0, 5.0, 10.0, 15.0, 20.0, 22.0, 21.0, 16.0, 10.0, 3.0, -2.0];
+        let mixed_temps = [
+            -5.0, 0.0, 5.0, 10.0, 15.0, 20.0, 22.0, 21.0, 16.0, 10.0, 3.0, -2.0,
+        ];
         let mixed_site = sample_site(40.0, mixed_temps, precip);
         let wb_metric = ThornthwaiteForcing.compute_water_balance(
             &mixed_site,

@@ -135,6 +135,7 @@ impl ThermalModel for ClassicThermal {
             moisture_regime,
             regime_subdivision1,
             regime_subdivision2,
+            aquic_bio_days: 0,
         }
     }
 }
@@ -170,11 +171,11 @@ fn classify_str(
     };
 
     let cr1 = tma < 0.0;
-    let cr2 = 0.0 <= tma && tma < 8.0;
+    let cr2 = (0.0..8.0).contains(&tma);
     let cr3 = st >= 0.0 && st < cryic_ht;
     let cr7 = (dif_abs * fcd) >= 6.0;
-    let cr8 = tma >= 8.0 && tma < 15.0;
-    let cr9 = tma >= 15.0 && tma < 22.0;
+    let cr8 = (8.0..15.0).contains(&tma);
+    let cr9 = (15.0..22.0).contains(&tma);
     let cr10 = tma >= 22.0;
     let cr11 = tma < 8.0;
 
@@ -363,7 +364,7 @@ fn consecutive_iday_run(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn classify_smr(
+pub(crate) fn classify_smr(
     swt_nonzero: bool,
     nsd_dry: f64,
     lt5c: f64,
@@ -458,7 +459,9 @@ mod tests {
         SiteInput {
             lat_dd: 40.0,
             lon_dd: -77.0,
-            temp_c: [0.0, 1.0, 5.0, 10.0, 15.0, 20.0, 22.0, 21.0, 16.0, 10.0, 4.0, 1.0],
+            temp_c: [
+                0.0, 1.0, 5.0, 10.0, 15.0, 20.0, 22.0, 21.0, 16.0, 10.0, 4.0, 1.0,
+            ],
             precip_mm: [80.0; 12],
             awc_mm: 200.0,
             elev_m: 300.0,
@@ -482,6 +485,7 @@ mod tests {
             profile: [0.0; 64],
             iday: [state; 360],
             nd,
+            ..SoilState::default()
         }
     }
 
@@ -492,7 +496,9 @@ mod tests {
         // Pergelic survives ONLY when tma < 0 AND 0 <= st < cryic_ht
         let mut inp = base_input();
         // tma = -1.0 (air mean -3.5 + 2.5); summer mean air = 0.0 => st = 2.5 in [0, 15)
-        inp.temp_c = [-8.0, -8.0, -5.0, -3.0, -1.0, 0.0, 0.0, 0.0, -2.0, -4.0, -5.0, -6.0];
+        inp.temp_c = [
+            -8.0, -8.0, -5.0, -3.0, -1.0, 0.0, 0.0, 0.0, -2.0, -4.0, -5.0, -6.0,
+        ];
         let (trr, _, _, _) = classify_str(&inp.temp_c, Hemisphere::North, &cfg);
         assert_eq!(trr, Some(TemperatureRegime::Pergelic));
 
@@ -510,7 +516,9 @@ mod tests {
         assert_eq!(trr, Some(TemperatureRegime::Isofrigid));
 
         // Cryic thresholds: cryic_ht = 15, 13, 8, 6
-        inp.temp_c = [0.0, 0.0, 2.0, 3.0, 5.0, 10.0, 10.0, 10.0, 5.0, 3.0, 2.0, 0.0];
+        inp.temp_c = [
+            0.0, 0.0, 2.0, 3.0, 5.0, 10.0, 10.0, 10.0, 5.0, 3.0, 2.0, 0.0,
+        ];
         // tma = 5.833, st = 12.5, dif = 10 => dif*0.66 = 6.6 >= 6
         assert_eq!(
             classify_str(&inp.temp_c, Hemisphere::North, &cfg).0,
@@ -537,19 +545,25 @@ mod tests {
             is_saturated: true,
             ..cfg
         };
-        inp.temp_c = [-1.0, -1.0, 0.0, 1.0, 2.0, 5.0, 5.0, 5.0, 2.0, 1.0, 0.0, -1.0]; // st=7.5 >= 6
+        inp.temp_c = [
+            -1.0, -1.0, 0.0, 1.0, 2.0, 5.0, 5.0, 5.0, 2.0, 1.0, 0.0, -1.0,
+        ]; // st=7.5 >= 6
         assert_eq!(
             classify_str(&inp.temp_c, Hemisphere::North, &cfg_o_sat).0,
             Some(TemperatureRegime::Isofrigid) // dif=6*0.66=3.96 < 6, st=7.5 >= 6
         );
-        inp.temp_c = [-1.0, -1.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0, 2.0, 1.0, 0.0, -1.0]; // st=5.5 < 6
+        inp.temp_c = [
+            -1.0, -1.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0, 2.0, 1.0, 0.0, -1.0,
+        ]; // st=5.5 < 6
         assert_eq!(
             classify_str(&inp.temp_c, Hemisphere::North, &cfg_o_sat).0,
             Some(TemperatureRegime::Cryic)
         );
 
         // Mesic / Thermic / Hyperthermic and Iso- counterparts
-        let seasonal_offset = [-6.0, -6.0, 0.0, 0.0, 0.0, 6.0, 6.0, 6.0, 0.0, 0.0, 0.0, -6.0];
+        let seasonal_offset = [
+            -6.0, -6.0, 0.0, 0.0, 0.0, 6.0, 6.0, 6.0, 0.0, 0.0, 0.0, -6.0,
+        ];
         let iso_offset = [0.0; 12];
         for (base_air, expected_reg, expected_iso) in [
             (8.0, TemperatureRegime::Mesic, TemperatureRegime::Isomesic),
@@ -911,7 +925,9 @@ mod tests {
 
         // Consecutive 5.0 and 8.0 months (including Dec->Jan wrap on 8.0)
         let mut inp = base_input();
-        inp.temp_c = [8.0, 4.0, 5.0, 5.0, 10.0, 12.0, 14.0, 12.0, 8.0, 8.0, 4.0, 8.0];
+        inp.temp_c = [
+            8.0, 4.0, 5.0, 5.0, 10.0, 12.0, 14.0, 12.0, 8.0, 8.0, 4.0, 8.0,
+        ];
         let snapshot = inp.temp_c;
         let out = ClassicThermal.evaluate(&inp, &cfg, &wb, &soil);
         // Caller input must remain unmutated (Defect #10)
@@ -919,15 +935,15 @@ mod tests {
 
         // Must match explicitly pre-perturbed 5.01 / 8.01 months
         let mut perturbed = inp;
-        perturbed.temp_c = [8.0, 4.0, 5.01, 5.0, 10.0, 12.0, 14.0, 12.0, 8.01, 8.0, 4.0, 8.01];
+        perturbed.temp_c = [
+            8.0, 4.0, 5.01, 5.0, 10.0, 12.0, 14.0, 12.0, 8.01, 8.0, 4.0, 8.01,
+        ];
         let out_perturbed = ClassicThermal.evaluate(&perturbed, &cfg, &wb, &soil);
         assert_eq!(out.day_counters, out_perturbed.day_counters);
 
         // Bimodal >5°C curve: has_run_already counts nsd from first interval only (Defect #6)
         let mut bimodal = base_input();
-        bimodal.temp_c = [
-            2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 2.0,
-        ];
+        bimodal.temp_c = [2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 2.0];
         let res_bi = ClassicThermal.evaluate(&bimodal, &cfg, &wb, &soil);
         let sum_nsd = res_bi.day_counters.num_cumulative_days_dry_over_5c
             + res_bi.day_counters.num_cumulative_days_moist_dry_over_5c
@@ -949,7 +965,9 @@ mod tests {
 
         // All months < 8.0°C (np8 == 0) => Defect #5 sets ncpm[2] = ncpm[1] = 100
         let mut cold = base_input();
-        cold.temp_c = [-5.0, -3.0, 0.0, 2.0, 4.0, 6.0, 7.0, 6.0, 4.0, 2.0, 0.0, -3.0];
+        cold.temp_c = [
+            -5.0, -3.0, 0.0, 2.0, 4.0, 6.0, 7.0, 6.0, 4.0, 2.0, 0.0, -3.0,
+        ];
         let cfg_metric = SiteConfig::default();
         let cfg_non_metric = SiteConfig {
             is_metric: false,
@@ -959,9 +977,14 @@ mod tests {
         let out_m = ClassicThermal.evaluate(&cold, &cfg_metric, &wb, &soil);
         let out_nm = ClassicThermal.evaluate(&cold, &cfg_non_metric, &wb, &soil);
         assert_eq!(out_m, out_nm); // Defect #2: is_metric ignored
-        assert_eq!(out_m.day_counters.num_consecutive_days_moist_in_some_parts, 100);
         assert_eq!(
-            out_m.day_counters.num_consecutive_days_moist_in_some_parts_over_8c,
+            out_m.day_counters.num_consecutive_days_moist_in_some_parts,
+            100
+        );
+        assert_eq!(
+            out_m
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c,
             100
         );
 

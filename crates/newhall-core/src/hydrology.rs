@@ -9,8 +9,8 @@ use crate::types::{SiteConfig, SiteInput, SoilState, WaterBalance};
 /// and omitting the unused sentinel `dp[64] = 160`).
 const DP: [usize; 64] = [
     7, 6, 15, 5, 14, 23, 4, 13, 22, 31, 3, 12, 21, 30, 39, 2, 11, 20, 29, 38, 47, 1, 10, 19, 28,
-    37, 46, 55, 0, 9, 18, 27, 36, 45, 54, 63, 8, 17, 26, 35, 44, 53, 62, 16, 25, 34, 43, 52, 61, 24,
-    33, 42, 51, 60, 32, 41, 50, 59, 40, 49, 58, 48, 57, 56,
+    37, 46, 55, 0, 9, 18, 27, 36, 45, 54, 63, 8, 17, 26, 35, 44, 53, 62, 16, 25, 34, 43, 52, 61,
+    24, 33, 42, 51, 60, 32, 41, 50, 59, 40, 49, 58, 48, 57, 56,
 ];
 
 /// Depletion resistance weights for each step in [`DP`]
@@ -99,6 +99,8 @@ impl HydrologyStep for ClassicHydrology {
             profile: sl,
             iday,
             nd,
+            sat_days_mcs: 0,
+            z_wt_daily: [f64::INFINITY; 360],
         }
     }
 }
@@ -106,7 +108,7 @@ impl HydrologyStep for ClassicHydrology {
 /// Inspects Moisture Control Section slots (`sl[9]`, `sl[17]`, `sl[25]` -> `[8]`, `[16]`, `[24]`):
 /// `1` = Dry, `2` = Moist/Dry, `3` = Moist; preserves `prev_k` if all conditions are false (`NaN`).
 #[inline]
-fn inspect_mcs(sl: &[f64; 64], prev_k: u8) -> u8 {
+pub(crate) fn inspect_mcs(sl: &[f64; 64], prev_k: u8) -> u8 {
     let d0 = sl[8] <= 0.0;
     let d1 = sl[16] <= 0.0;
     let d2 = sl[24] <= 0.0;
@@ -127,7 +129,7 @@ fn inspect_mcs(sl: &[f64; 64], prev_k: u8) -> u8 {
 
 /// Instantaneous mid-month storm recharge of slots `0..64` up to `fsl` (excess discarded).
 #[inline]
-fn storm_recharge(sl: &mut [f64; 64], fsl: f64, mut hp: f64) {
+pub(crate) fn storm_recharge(sl: &mut [f64; 64], fsl: f64, mut hp: f64) {
     for slot in sl.iter_mut() {
         if *slot < fsl {
             let esl = fsl - *slot;
@@ -143,7 +145,7 @@ fn storm_recharge(sl: &mut [f64; 64], fsl: f64, mut hp: f64) {
 
 /// One 15-day equilibration pass (discharge via `DP`/`DR` if `npe <= 0`, else sequential recharge).
 #[inline]
-fn equilibrate_half_month(sl: &mut [f64; 64], fsl: f64, precip_m: f64, mpe_m: f64) {
+pub(crate) fn equilibrate_half_month(sl: &mut [f64; 64], fsl: f64, precip_m: f64, mpe_m: f64) {
     let lp = precip_m / 2.0;
     let mut npe = (lp - mpe_m) / 2.0;
     if npe <= 0.0 {
@@ -177,13 +179,7 @@ fn equilibrate_half_month(sl: &mut [f64; 64], fsl: f64, precip_m: f64, mpe_m: f6
 
 /// Appends `count` days of MCS state `k` to `iday` and accumulates into `nd`.
 #[inline]
-fn assign_days(
-    iday: &mut [u8; 360],
-    nd: &mut [f64; 3],
-    day_cursor: &mut usize,
-    k: u8,
-    count: i32,
-) {
+fn assign_days(iday: &mut [u8; 360], nd: &mut [f64; 3], day_cursor: &mut usize, k: u8, count: i32) {
     if count > 0 {
         let end = *day_cursor + count as usize;
         for slot in &mut iday[*day_cursor..end] {
@@ -228,7 +224,7 @@ fn maybe_record_transition(
 
 /// Simulates one 15-day final-year half-month pass and assigns exactly 15 days to `iday`/`nd`.
 #[allow(clippy::too_many_arguments)]
-fn simulate_half_month(
+pub(crate) fn simulate_half_month(
     sl: &mut [f64; 64],
     fsl: f64,
     precip_m: f64,

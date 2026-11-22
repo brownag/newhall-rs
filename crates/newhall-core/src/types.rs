@@ -287,6 +287,10 @@ pub struct SoilState {
     pub iday: [u8; 360],
     /// Cumulative days Dry (`nd[0]`), Moist/Dry (`nd[1]`), and Moist (`nd[2]`).
     pub nd: [f64; 3],
+    /// Cumulative days where water table is within the Moisture Control Section (`0` in classic mode).
+    pub sat_days_mcs: i32,
+    /// Daily water-table depth (m, positive downward; `f64::INFINITY` when absent).
+    pub z_wt_daily: [f64; 360],
 }
 
 impl Default for SoilState {
@@ -295,6 +299,8 @@ impl Default for SoilState {
             profile: [0.0; 64],
             iday: [0; 360],
             nd: [0.0; 3],
+            sat_days_mcs: 0,
+            z_wt_daily: [f64::INFINITY; 360],
         }
     }
 }
@@ -345,9 +351,11 @@ pub struct ThermalClassification {
     pub moisture_regime: MoistureRegime,
     pub regime_subdivision1: RegimeSubdivision1,
     pub regime_subdivision2: RegimeSubdivision2,
+    /// Consecutive days with `z_wt <= 0.50 m` and `T(0.50 m) > 5.0 °C` (`0` in classic mode).
+    pub aquic_bio_days: i32,
 }
 
-/// Complete 19-field simulation output matching `jNSMR::batch3()` (`Copy`).
+/// Complete simulation output matching `jNSMR::batch3()` plus Phase 4 diagnostics (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SiteOutput {
     pub annual_rainfall: f64,
@@ -370,6 +378,10 @@ pub struct SiteOutput {
     pub moisture_regime: MoistureRegime,
     pub regime_subdivision1: RegimeSubdivision1,
     pub regime_subdivision2: RegimeSubdivision2,
+    /// Cumulative days where water table is within the MCS (`0` in classic mode).
+    pub sat_days_mcs: i32,
+    /// Consecutive days where `z_wt <= 0.50 m` and `T(0.50 m) > 5.0 °C` (`0` in classic mode).
+    pub aquic_bio_days: i32,
 }
 
 impl SiteOutput {
@@ -533,6 +545,8 @@ mod tests {
             moisture_regime: MoistureRegime::Perudic,
             regime_subdivision1: RegimeSubdivision1::Undefined,
             regime_subdivision2: RegimeSubdivision2::Undefined,
+            sat_days_mcs: 0,
+            aquic_bio_days: 0,
         };
         assert_eq!(base.temperature_regime_java_str(), "");
         assert_eq!(base.regime_subdivision1_java_str(), " ");

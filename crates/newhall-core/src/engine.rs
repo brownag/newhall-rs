@@ -132,6 +132,8 @@ where
             moisture_regime: thermal.moisture_regime,
             regime_subdivision1: thermal.regime_subdivision1,
             regime_subdivision2: thermal.regime_subdivision2,
+            sat_days_mcs: soil_state.sat_days_mcs,
+            aquic_bio_days: thermal.aquic_bio_days,
         }
     }
 }
@@ -177,11 +179,7 @@ where
     }
 
     /// Executes an SoA batch and collects the results into a `Vec<SiteOutput>`.
-    pub fn run_batch_soa(
-        &self,
-        batch: &SoaBatchInput<'_>,
-        config: &SiteConfig,
-    ) -> Vec<SiteOutput> {
+    pub fn run_batch_soa(&self, batch: &SoaBatchInput<'_>, config: &SiteConfig) -> Vec<SiteOutput> {
         batch.validate();
         let n = batch.len();
 

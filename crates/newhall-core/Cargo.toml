@@ -11,3 +11,6 @@ parallel = ["dep:rayon"]
 
 [dependencies]
 rayon = { version = "1", optional = true }
+
+[dev-dependencies]
+proptest = "1"
