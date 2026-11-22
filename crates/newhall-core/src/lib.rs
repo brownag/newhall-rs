@@ -7,6 +7,10 @@ pub mod thermal;
 pub mod traits;
 pub mod types;
 
+pub use engine::{run_batch_soa, simulate_site, ClassicNewhall, SoaBatchInput};
+pub use forcing::ThornthwaiteForcing;
+pub use hydrology::ClassicHydrology;
+pub use thermal::ClassicThermal;
 pub use traits::{ForcingModel, HydrologyStep, SimEngine, ThermalModel};
 pub use types::{
     DayCounters, Hemisphere, MoistureRegime, RegimeSubdivision1, RegimeSubdivision2, SiteConfig,
