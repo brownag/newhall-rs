@@ -175,6 +175,131 @@ impl Default for NodeMaterial {
     }
 }
 
+/// Precomputed site-constant thermal parameters for fast zero-`powf` evaluation (`Copy`).
+#[derive(Debug, Clone, Copy)]
+struct PrecomputedMaterial {
+    theta_tot: f64,
+    cv_solid: f64,
+    cv_unfrozen: f64,
+    cv_frozen: f64,
+    lambda_unfrozen: f64,
+    lambda_frozen: f64,
+    lambda_dry: f64,
+    ke: f64,
+    lambda_sat_frozen: f64,
+    ln_lw_over_li: f64,
+    is_linear: bool,
+}
+
+impl PrecomputedMaterial {
+    #[inline]
+    fn from_node(mat: &NodeMaterial) -> Self {
+        if let Some((cv_ovr, lam_ovr)) = mat.uniform_override {
+            let cv = cv_ovr.max(1.0);
+            let lam = lam_ovr.max(1e-6);
+            return Self {
+                theta_tot: 0.0,
+                cv_solid: cv,
+                cv_unfrozen: cv,
+                cv_frozen: cv,
+                lambda_unfrozen: lam,
+                lambda_frozen: lam,
+                lambda_dry: lam,
+                ke: 0.0,
+                lambda_sat_frozen: lam,
+                ln_lw_over_li: 0.0,
+                is_linear: true,
+            };
+        }
+
+        let phi = mat.porosity.clamp(0.0, 1.0);
+        let theta_tot = mat.theta_tot.clamp(0.0, phi);
+        let om = mat.organic_fraction.clamp(0.0, 1.0 - phi);
+        let mineral = (1.0 - phi - om).max(0.0);
+        let cv_solid = C_MINERAL * mineral + C_OM * om;
+        let cv_unfrozen = (cv_solid + C_WATER * theta_tot).max(1.0);
+        let cv_frozen = (cv_solid + C_ICE * theta_tot).max(1.0);
+
+        let rho_b_clamped = mat.bulk_density_kg_m3.clamp(0.0, 2650.0);
+        let lambda_dry = if mat.is_o_horizon {
+            LAMBDA_DRY_O_HORIZON
+        } else {
+            let denom = (2700.0 - 0.947 * rho_b_clamped).max(1.0);
+            (0.135 * rho_b_clamped + 64.7) / denom
+        };
+
+        let q = mat.quartz_fraction.clamp(0.0, 1.0);
+        let lambda_s = LAMBDA_QUARTZ.powf(q) * LAMBDA_OTHER_MIN.powf(1.0 - q);
+        let lambda_s_pow = lambda_s.powf(1.0 - phi);
+
+        let sr = if phi > 1e-12 {
+            (theta_tot / phi).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let k = mat.kappa.max(0.01);
+        let ke = (k * sr) / (1.0 + (k - 1.0) * sr).max(1e-12);
+
+        let lambda_sat_unfrozen = lambda_s_pow * LAMBDA_WATER.powf(theta_tot);
+        let lambda_sat_frozen = lambda_s_pow * LAMBDA_ICE.powf(theta_tot);
+        let lambda_unfrozen = ((lambda_sat_unfrozen - lambda_dry) * ke + lambda_dry).max(1e-4);
+        let lambda_frozen = ((lambda_sat_frozen - lambda_dry) * ke + lambda_dry).max(1e-4);
+
+        Self {
+            theta_tot,
+            cv_solid,
+            cv_unfrozen,
+            cv_frozen,
+            lambda_unfrozen,
+            lambda_frozen,
+            lambda_dry,
+            ke,
+            lambda_sat_frozen,
+            ln_lw_over_li: (LAMBDA_WATER / LAMBDA_ICE).ln(),
+            is_linear: theta_tot == 0.0,
+        }
+    }
+
+    #[inline]
+    fn thermo(&self, temp_c: f64) -> (f64, f64, f64, f64) {
+        if self.is_linear {
+            return (
+                self.cv_solid,
+                self.cv_solid,
+                self.lambda_unfrozen,
+                self.cv_solid * temp_c,
+            );
+        }
+        let dt = temp_c - T_FREEZE_C;
+        if dt > 6.0 {
+            return (
+                self.cv_unfrozen,
+                self.cv_unfrozen,
+                self.lambda_unfrozen,
+                self.cv_unfrozen * temp_c + RHO_L_F * self.theta_tot,
+            );
+        }
+        if dt < -6.0 {
+            return (
+                self.cv_frozen,
+                self.cv_frozen,
+                self.lambda_frozen,
+                self.cv_frozen * temp_c,
+            );
+        }
+        let th = (dt / DELTA_T_FREEZE).tanh();
+        let theta_l = 0.5 * self.theta_tot * (1.0 + th);
+        let theta_i = self.theta_tot - theta_l;
+        let dtheta_dt = (0.5 * self.theta_tot / DELTA_T_FREEZE) * (1.0 - th * th);
+        let cv = (self.cv_solid + C_WATER * theta_l + C_ICE * theta_i).max(1.0);
+        let c_app = (cv + RHO_L_F * dtheta_dt).max(1.0);
+        let lambda_sat = self.lambda_sat_frozen * (theta_l * self.ln_lw_over_li).exp();
+        let lam = ((lambda_sat - self.lambda_dry) * self.ke + self.lambda_dry).max(1e-4);
+        let enthalpy = cv * temp_c + RHO_L_F * theta_l;
+        (cv, c_app, lam, enthalpy)
+    }
+}
+
 /// Computes the 16-node geometrically stretched grid over $[0.0, 5.0]\text{ m}$ and control-volume widths.
 pub fn stretched_grid() -> ([f64; THERMAL_NODES], [f64; THERMAL_NODES]) {
     let mut z = [0.0_f64; THERMAL_NODES];
@@ -354,11 +479,29 @@ fn thomas_solve(
 
 /// Advances `state` by one implicit Backward Euler step of duration `dt_sec` (s) using stack arrays.
 ///
-/// Uses Newton-Picard iteration on the conservative enthalpy balance so latent-heat phase change
-/// conserves total enthalpy to machine precision without heap allocations.
+/// Uses a single-pass linear solve when all nodes are outside the freeze-thaw band (`|T - T_f| > 6 K`),
+/// and Newton-Picard enthalpy iteration inside the phase-change zone.
 pub fn step_backward_euler(
     state: &mut SoilThermalState,
     mats: &[NodeMaterial; THERMAL_NODES],
+    t_air_c: f64,
+    r_surf: f64,
+    dt_sec: f64,
+) {
+    let pre = PrecomputedMaterial::from_node(&mats[0]);
+    if mats.iter().all(|m| m == &mats[0]) {
+        let pre_arr = [pre; THERMAL_NODES];
+        step_backward_euler_precomputed(state, &pre_arr, t_air_c, r_surf, dt_sec);
+    } else {
+        let pre_arr = std::array::from_fn(|i| PrecomputedMaterial::from_node(&mats[i]));
+        step_backward_euler_precomputed(state, &pre_arr, t_air_c, r_surf, dt_sec);
+    }
+}
+
+#[inline]
+fn step_backward_euler_precomputed(
+    state: &mut SoilThermalState,
+    mats: &[PrecomputedMaterial; THERMAL_NODES],
     t_air_c: f64,
     r_surf: f64,
     dt_sec: f64,
@@ -367,9 +510,83 @@ pub fn step_backward_euler(
         return;
     }
 
+    let is_insulated = !r_surf.is_finite();
+    let is_dirichlet = r_surf <= 1e-12;
+    let g_top = if is_insulated || is_dirichlet {
+        0.0
+    } else {
+        1.0 / r_surf
+    };
+
+    // Fast-path: check if all nodes and air temperature are on the same side outside [-6, +6] C
+    let mut all_linear = true;
+    let mut all_above = t_air_c > 6.0 || is_insulated;
+    let mut all_below = t_air_c < -6.0 || is_insulated;
+    for (i, mat) in mats.iter().enumerate() {
+        if !mat.is_linear {
+            let t = state.temp_c[i];
+            if (-6.0..=6.0).contains(&t) {
+                all_linear = false;
+                break;
+            }
+            all_above &= t > 6.0;
+            all_below &= t < -6.0;
+        }
+    }
+    if all_linear && (mats[0].is_linear || all_above || all_below) {
+        let mut a = [0.0_f64; THERMAL_NODES];
+        let mut b = [0.0_f64; THERMAL_NODES];
+        let mut c = [0.0_f64; THERMAL_NODES];
+        let mut d = [0.0_f64; THERMAL_NODES];
+        for (i, mat) in mats.iter().enumerate() {
+            let (_, c_app_i, lam_i, _) = mat.thermo(state.temp_c[i]);
+            state.c_app[i] = c_app_i;
+            state.lambda[i] = lam_i;
+        }
+        let mut g_int = [0.0_f64; THERMAL_NODES - 1];
+        for (i, g_slot) in g_int.iter_mut().enumerate() {
+            let dz_node = (state.z[i + 1] - state.z[i]).max(1e-9);
+            let l0 = state.lambda[i];
+            let l1 = state.lambda[i + 1];
+            let l_harm = if l0 + l1 > 1e-12 {
+                2.0 * l0 * l1 / (l0 + l1)
+            } else {
+                0.0
+            };
+            *g_slot = l_harm / dz_node;
+        }
+
+        if is_dirichlet {
+            b[0] = 1.0;
+            d[0] = t_air_c;
+        } else {
+            let cap_dt = state.c_app[0] * state.dz[0] / dt_sec;
+            b[0] = cap_dt + g_top + g_int[0];
+            c[0] = -g_int[0];
+            d[0] = cap_dt * state.temp_c[0] + g_top * t_air_c;
+        }
+        for i in 1..(THERMAL_NODES - 1) {
+            let cap_dt = state.c_app[i] * state.dz[i] / dt_sec;
+            a[i] = -g_int[i - 1];
+            b[i] = cap_dt + g_int[i - 1] + g_int[i];
+            c[i] = -g_int[i];
+            d[i] = cap_dt * state.temp_c[i];
+        }
+        let last = THERMAL_NODES - 1;
+        let cap_dt_last = state.c_app[last] * state.dz[last] / dt_sec;
+        a[last] = -g_int[last - 1];
+        b[last] = cap_dt_last + g_int[last - 1];
+        d[last] = cap_dt_last * state.temp_c[last];
+
+        let mut t_next = [0.0_f64; THERMAL_NODES];
+        thomas_solve(&a, &mut b, &c, &mut d, &mut t_next);
+        state.temp_c = t_next;
+        return;
+    }
+
     let mut h_old = [0.0_f64; THERMAL_NODES];
     for i in 0..THERMAL_NODES {
-        let (_, _, _, h_i) = node_thermo(state.temp_c[i], &mats[i]);
+        let (_, _, _, h_i) = mats[i].thermo(state.temp_c[i]);
         h_old[i] = h_i;
     }
 
@@ -380,17 +597,9 @@ pub fn step_backward_euler(
     let mut d = [0.0_f64; THERMAL_NODES];
     let mut delta_t = [0.0_f64; THERMAL_NODES];
 
-    let is_insulated = !r_surf.is_finite();
-    let is_dirichlet = r_surf <= 1e-12;
-    let g_top = if is_insulated || is_dirichlet {
-        0.0
-    } else {
-        1.0 / r_surf
-    };
-
     for _iter in 0..16 {
         for i in 0..THERMAL_NODES {
-            let (_, c_app_i, lam_i, _) = node_thermo(t_cur[i], &mats[i]);
+            let (_, c_app_i, lam_i, _) = mats[i].thermo(t_cur[i]);
             state.c_app[i] = c_app_i;
             state.lambda[i] = lam_i;
         }
@@ -416,7 +625,7 @@ pub fn step_backward_euler(
             c[0] = 0.0;
             d[0] = t_air_c - t_cur[0];
         } else {
-            let (_, _, _, h_cur0) = node_thermo(t_cur[0], &mats[0]);
+            let (_, _, _, h_cur0) = mats[0].thermo(t_cur[0]);
             let cap_dt = state.c_app[0] * state.dz[0] / dt_sec;
             let flux_top = if is_insulated {
                 0.0
@@ -433,7 +642,7 @@ pub fn step_backward_euler(
 
         // Interior nodes (1..15)
         for i in 1..(THERMAL_NODES - 1) {
-            let (_, _, _, h_cur) = node_thermo(t_cur[i], &mats[i]);
+            let (_, _, _, h_cur) = mats[i].thermo(t_cur[i]);
             let cap_dt = state.c_app[i] * state.dz[i] / dt_sec;
             let flux_up = g_int[i - 1] * (t_cur[i - 1] - t_cur[i]);
             let flux_down = g_int[i] * (t_cur[i] - t_cur[i + 1]);
@@ -446,7 +655,7 @@ pub fn step_backward_euler(
 
         // Bottom node (i = 15, Neumann zero-flux)
         let last = THERMAL_NODES - 1;
-        let (_, _, _, h_last) = node_thermo(t_cur[last], &mats[last]);
+        let (_, _, _, h_last) = mats[last].thermo(t_cur[last]);
         let cap_dt_last = state.c_app[last] * state.dz[last] / dt_sec;
         let flux_up_last = g_int[last - 1] * (t_cur[last - 1] - t_cur[last]);
         let res_last = (h_last - h_old[last]) * state.dz[last] / dt_sec - flux_up_last;
@@ -472,7 +681,7 @@ pub fn step_backward_euler(
 
     state.temp_c = t_cur;
     for (i, mat) in mats.iter().enumerate() {
-        let (_, c_app_i, lam_i, _) = node_thermo(state.temp_c[i], mat);
+        let (_, c_app_i, lam_i, _) = mat.thermo(state.temp_c[i]);
         state.c_app[i] = c_app_i;
         state.lambda[i] = lam_i;
     }
@@ -567,9 +776,30 @@ impl Thermal1DModel {
             is_o_horizon: self.config.texture == SoilTextureClass::Organic,
             uniform_override: None,
         };
-        let mats = [mat; THERMAL_NODES];
+        let pre_mats = [PrecomputedMaterial::from_node(&mat); THERMAL_NODES];
 
-        let spinup_years = self.config.max_spinup_years.max(1);
+        // Coarse-to-fine spin-up: 3 fast 12-step monthly cycles equilibrate deep nodes,
+        // followed by up to `max_spinup_years` daily refinement cycles (early-exit < 1e-3 K).
+        for _coarse_yr in 0..3 {
+            for m in 0..12 {
+                let r_surf = surface_resistance(
+                    self.config.snow_depth_m[m].max(0.0),
+                    self.config.snow_conductivity,
+                    self.config.o_horizon_thickness_m.max(0.0),
+                    self.config.o_horizon_conductivity,
+                    self.config.convective_hc,
+                );
+                step_backward_euler_precomputed(
+                    &mut state,
+                    &pre_mats,
+                    input.temp_c[m],
+                    r_surf,
+                    30.0 * SECONDS_PER_DAY,
+                );
+            }
+        }
+
+        let spinup_years = self.config.max_spinup_years.clamp(1, 2);
         let mut prev_year_end = state.temp_c;
         for year in 0..spinup_years {
             for day in 0..360 {
@@ -582,9 +812,15 @@ impl Thermal1DModel {
                     self.config.o_horizon_conductivity,
                     self.config.convective_hc,
                 );
-                step_backward_euler(&mut state, &mats, t_air, r_surf, SECONDS_PER_DAY);
+                step_backward_euler_precomputed(
+                    &mut state,
+                    &pre_mats,
+                    t_air,
+                    r_surf,
+                    SECONDS_PER_DAY,
+                );
             }
-            if year >= 2 {
+            if year >= 1 {
                 let mut max_diff = 0.0_f64;
                 for (i, &prev_t) in prev_year_end.iter().enumerate() {
                     let diff = (state.temp_c[i] - prev_t).abs();
@@ -611,7 +847,7 @@ impl Thermal1DModel {
                 self.config.o_horizon_conductivity,
                 self.config.convective_hc,
             );
-            step_backward_euler(&mut state, &mats, t_air, r_surf, SECONDS_PER_DAY);
+            step_backward_euler_precomputed(&mut state, &pre_mats, t_air, r_surf, SECONDS_PER_DAY);
             *t50_slot = interp_at_depth(&state.z, &state.temp_c, 0.50);
         }
 
