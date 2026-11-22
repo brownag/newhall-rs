@@ -2,7 +2,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-use newhall_core::{run_batch_soa, simulate_site, SiteConfig, SiteInput, SiteOutput, SoaBatchInput};
+use newhall_core::{
+    run_batch_soa, simulate_site, SiteConfig, SiteInput, SiteOutput, SoaBatchInput,
+};
 
 const FLOAT_TOL: f64 = 1e-9;
 
@@ -176,13 +178,7 @@ fn load_fixture(filename: &str) -> Vec<FixtureRow> {
     rows
 }
 
-fn assert_float_close(
-    fixture: &str,
-    row_num: usize,
-    field: &str,
-    actual: f64,
-    expected_str: &str,
-) {
+fn assert_float_close(fixture: &str, row_num: usize, field: &str, actual: f64, expected_str: &str) {
     let expected: f64 = expected_str.parse().unwrap_or_else(|e| {
         panic!("{fixture} row {row_num} {field}: invalid f64 '{expected_str}': {e}")
     });
@@ -193,13 +189,7 @@ fn assert_float_close(
     );
 }
 
-fn assert_i32_exact(
-    fixture: &str,
-    row_num: usize,
-    field: &str,
-    actual: i32,
-    expected_str: &str,
-) {
+fn assert_i32_exact(fixture: &str, row_num: usize, field: &str, actual: i32, expected_str: &str) {
     let expected: i32 = expected_str.parse().unwrap_or_else(|e| {
         panic!("{fixture} row {row_num} {field}: invalid i32 '{expected_str}': {e}")
     });
@@ -213,7 +203,13 @@ fn assert_valid_row_matches(fixture: &str, row: &FixtureRow, actual: &SiteOutput
     let r = row.row_num;
     let exp = &row.raw_outputs;
 
-    assert_float_close(fixture, r, "annualRainfall", actual.annual_rainfall, &exp[0]);
+    assert_float_close(
+        fixture,
+        r,
+        "annualRainfall",
+        actual.annual_rainfall,
+        &exp[0],
+    );
     assert_float_close(
         fixture,
         r,
@@ -323,7 +319,10 @@ fn assert_valid_row_matches(fixture: &str, row: &FixtureRow, actual: &SiteOutput
         temp_str, exp[15],
         "{fixture} row {r} temperatureRegime mismatch"
     );
-    assert_eq!(moist_str, exp[16], "{fixture} row {r} moistureRegime mismatch");
+    assert_eq!(
+        moist_str, exp[16],
+        "{fixture} row {r} moistureRegime mismatch"
+    );
     assert_eq!(
         sub1_str, exp[17],
         "{fixture} row {r} regimeSubdivision1 mismatch"
@@ -372,7 +371,12 @@ fn run_soa_for_rows(rows: &[FixtureRow], config: &SiteConfig) -> Vec<SiteOutput>
     run_batch_soa(&batch, config)
 }
 
-fn verify_fixture(filename: &str, expected_total: usize, expected_valid: usize, expected_na: usize) {
+fn verify_fixture(
+    filename: &str,
+    expected_total: usize,
+    expected_valid: usize,
+    expected_na: usize,
+) {
     let rows = load_fixture(filename);
     assert_eq!(rows.len(), expected_total, "{filename}: row count mismatch");
 
