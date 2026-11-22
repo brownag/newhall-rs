@@ -1,32 +1,40 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-22
-Source State: INITIAL_PROMPT.md
+Source State: STATE_2.md (Phase 4 implemented)
 
 ## Circled Goal (Active)
 
-- **[G3]** Cargo workspace (`crates/newhall-core`, `crates/newhall-cli`, `r-pkg/`) compiles cleanly with static-dispatch traits (`ThermalModel`, `ForcingModel`, `HydrologyStep`), `Copy` per-site state, `[f64; 64]` moisture profile, and integer enum discriminants.
-  - Depends on: G1
+- **[G18]** Opt-in `StrictThornthwaiteForcing` / `strict_mode` remediates the 11 audited `jNSMR` defects (including SH PET `* 60.0` #1 and negative `latDD` #7 for Phase 4) while preserving `ClassicNewhall` parity.
+  - Why now: Now that Phase 4 throughput exceeds 10,000 sims/sec, remediating the remaining forcing defects improves Southern Hemisphere Phase 4 accuracy without sacrificing `jNSMR` parity.
+  - Exit criteria: `StrictThornthwaiteForcing` (and strict STR/SMR options) pass dedicated unit tests for all 11 defects while `golden_master.rs` remains 100% green.
+  - First action: Add `StrictThornthwaiteForcing` in `crates/newhall-core/src/forcing.rs` fixing Defects #1 and #7.
 
 ## Completed Goals
 
 - **[G1]** Local reference repositories (`~/workspace/jNSMR` and `~/workspace/jNSMR/java`) audited (`planning/AUDIT_JNSM.md`).
 - **[G2]** Deterministic golden-master test fixtures generated from `jNSMR` (`crates/newhall-core/tests/fixtures/`).
+- **[G3]** Cargo workspace (`crates/newhall-core`, `crates/newhall-cli`) compiles cleanly with static-dispatch traits (`ThermalModel`, `ForcingModel`, `HydrologyStep`), `Copy` per-site state, `[f64; 64]` moisture profile, and integer enum discriminants.
+- **[G4]** `newhall-core` implements the baseline/custom Java NSM with zero inner-loop heap allocations; `cargo test` passes within `1e-9` on floats and 100% exact match on all categorical outputs across golden-master fixtures.
+- **[G9]** Phase 4 `Thermal1DModel` and `WaterTableHydrology` implemented with adversarial validation (`adversarial_phase4.rs`, 10k `proptest`) and `r-pkg` `extendr` bindings (`newhall_batch`, `newhall_batch_phase4`).
+- **[G11]** Pure-Rust Phase 4 micro-benchmark suite (`newhall-cli bench`) measures per-stage throughput (`ClassicNewhall`, `WaterTableHydrology`, `Thermal1DModel`, `Full Phase 4`).
+- **[G13]** Linear fast-path in `step_backward_euler` outside the freeze–thaw window (`|T - T_f| > 6 K`).
+- **[G14]** Precomputed per-site thermal material constants (`PrecomputedMaterial`) eliminate `powf()` calls inside the daily 16-node Newton–Picard loop.
+- **[G15]** Coarse-to-fine thermal spin-up equilibrates deep nodes in 36 monthly steps before 1–2 daily refinement years.
+- **[G17]** Phase 4 batch throughput reaches `10,161 sims/sec` (`> 10,000 sims/sec` target, `9.0x` speedup over `1,125 sims/sec` baseline).
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G4]** `newhall-core` implements the baseline/custom Java NSM with zero inner-loop heap allocations; `cargo test` passes within `1e-9` on floats and 100% exact match on all categorical outputs across golden-master fixtures.
-  - Depends on: G1, G2, G3
+- **[G12]** Adversarial & parity regression gate (`adversarial_phase4.rs` + `golden_master.rs`) guards all optimizations.
+  - Depends on: G4, G9
+- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
+  - Depends on: G11, G12
 - **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
   - Depends on: G2, G3, G4
-- **[G6]** `r-pkg/src/rust/` exposes a vectorized `newhall_batch()` via `extendr` using SoA `&[f64]` slices and `rayon`, handling `NA`/`NaN` safely and supporting CRAN vendoring (`rextendr::vendor_pkgs()`).
-  - Depends on: G3, G4
 - **[G7]** `r-pkg/R/` mirrors `jNSMR`'s user-facing API for `data.frame` and `terra::SpatRaster` inputs using chunked `readStart()`/`readValues()`/`writeValues()` and `terra::set.cats()`.
-  - Depends on: G1, G6
+  - Depends on: G1, G9
 - **[G8]** `R CMD check` passes cleanly, `testthat` verifies parity with `jNSMR`, and a benchmark reports speedup over `jNSMR` on the sample raster dataset.
-  - Depends on: G2, G4, G6, G7
-- **[G9]** Stub/initial implementations and unit tests exist for extended `ThermalModel`, `ForcingModel`, and `HydrologyStep` traits without breaking the baseline API.
-  - Depends on: G3
+  - Depends on: G2, G4, G7
 - **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
   - Depends on: G3, G9
 

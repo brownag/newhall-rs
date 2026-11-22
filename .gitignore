@@ -3,6 +3,7 @@ target/
 *.rs.bk
 r-pkg/src/*.o
 r-pkg/src/*.so
+r-pkg/src/symbols.rds
 r-pkg/src/.cargo/
 r-pkg/src/rust/target/
 r-pkg/src/rust/Cargo.lock
