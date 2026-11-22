@@ -1,0 +1,61 @@
+{
+  "jnsmr_version": "0.3.1",
+  "jar_version": "1.6.5",
+  "jar_filename": "newhall-1.6.5.jar",
+  "generated_at": "2026-11-22T19:23:34Z",
+  "r_version": "R version 4.6.2 (2026-10-29)",
+  "parameters": {
+    "unitSystem": "metric",
+    "soilAirOffset": 2.5,
+    "amplitude": 0.66,
+    "hasOHorizon": false,
+    "isSaturated": false
+  },
+  "formatting": {
+    "float_format": "%.17g",
+    "na_string": "NA",
+    "na_policy": "All rows/cells preserved in original order; rows/cells with is.na(awc) receive NA outputs, matching newhall_batch.SpatRaster() skip logic.",
+    "raster_oracle_note": "Raster cells extracted via terra::values(..., dataframe = TRUE) and evaluated via newhall_batch() data.frame/batch3 path to preserve exact 64-bit Java double[] and String[] outputs without GeoTIFF FLT4S quantization."
+  },
+  "input_columns": ["latDD", "lonDD", "tJan", "tFeb", "tMar", "tApr", "tMay", "tJun", "tJul", "tAug", "tSep", "tOct", "tNov", "tDec", "pJan", "pFeb", "pMar", "pApr", "pMay", "pJun", "pJul", "pAug", "pSep", "pOct", "pNov", "pDec", "awc", "elev"],
+  "output_columns": ["annualRainfall", "waterHoldingCapacity", "annualWaterBalance", "annualPotentialEvapotranspiration", "summerWaterBalance", "dryDaysAfterSummerSolstice", "moistDaysAfterWinterSolstice", "numCumulativeDaysDry", "numCumulativeDaysMoistDry", "numCumulativeDaysMoist", "numCumulativeDaysDryOver5C", "numCumulativeDaysMoistDryOver5C", "numCumulativeDaysMoistOver5C", "numConsecutiveDaysMoistInSomeParts", "numConsecutiveDaysMoistInSomePartsOver8C", "temperatureRegime", "moistureRegime", "regimeSubdivision1", "regimeSubdivision2"],
+  "fixtures": {
+    "pa_batch_metric": {
+      "file": "pa_batch_metric.csv",
+      "source_file": "All_PA_jNSM_Example_Batch_Metric.csv",
+      "source_type": "csv",
+      "rows_total": 108,
+      "rows_valid": 108,
+      "rows_na": 0,
+      "runtime_secs": 0.095
+    },
+    "prism_sample": {
+      "file": "prism_sample.csv",
+      "source_file": "prism_issr800_sample.tif",
+      "source_type": "raster",
+      "raster_dims": {
+        "nrow": 113,
+        "ncol": 168,
+        "ncell": 18984
+      },
+      "rows_total": 18984,
+      "rows_valid": 18790,
+      "rows_na": 194,
+      "runtime_secs": 9.204
+    },
+    "daymet_sample": {
+      "file": "daymet_sample.csv",
+      "source_file": "daymet_issr800_sample.tif",
+      "source_type": "raster",
+      "raster_dims": {
+        "nrow": 113,
+        "ncol": 168,
+        "ncell": 18984
+      },
+      "rows_total": 18984,
+      "rows_valid": 18790,
+      "rows_na": 194,
+      "runtime_secs": 9.091
+    }
+  }
+}
