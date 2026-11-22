@@ -1,0 +1,17 @@
+Package: newhallrs
+Title: Fast Rust-Backed Newhall Soil Moisture and Temperature Regime Simulation
+Version: 0.1.0
+Author: Newhall Contributors
+Maintainer: Newhall Contributors <newhall@example.com>
+Authors@R: person("Newhall", "Contributors", email = "newhall@example.com", role = c("aut", "cre"))
+Description: Vectorized Newhall Simulation Model with classic jNSMR parity and
+    Phase 4 1D soil thermal and fluctuating water-table physics extensions.
+License: MIT
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+SystemRequirements: Cargo (rustc >= 1.70)
+Config/rextendr/version: 0.5.0
+Config/roxygen2/version: 8.1.1
