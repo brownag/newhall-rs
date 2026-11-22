@@ -17,7 +17,7 @@ Last Updated: 2026-11-22
 | 2 | `2.2.1` | Implement Thornthwaite PET & latitude forcing (`forcing.rs`) | done | flash | `61ff37a` |
 | 2 | `2.2.2` | Implement 8×8 soil moisture loop & 360-day calendar (`hydrology.rs`) | done | flash | `a8d5f8b` |
 | 2 | `2.2.3` | Implement thermal model, day counters & STR/SMR classifiers (`thermal.rs`) | done | flash | `2da24ae` |
-| 3 | `2.3.1` | Wire `SimEngine`, SoA batch runner (`engine.rs`), and `lib.rs` exports | pending | flash | — |
+| 3 | `2.3.1` | Wire `SimEngine`, SoA batch runner (`engine.rs`), and `lib.rs` exports | done | flash | `04ccda7` |
 | 4 | `2.4.1` | Add golden-master integration tests (`golden_master.rs`) & verify parity | pending | flash | — |
 
 ## Task Reports
@@ -65,3 +65,13 @@ Last Updated: 2026-11-22
   - `ClassicThermal` is a zero-sized `Copy` + `Default` struct implementing `ThermalModel` with zero heap allocations; wire it directly into `SimEngine` in `2.3.1`.
   - `consecutive_iday_run` replicates Java's exact lookahead `iday[n1]` boundary behavior (an isolated 1-day run yields `0` when `sw == 0`; runs continuing past window end count via `ifin`).
   - `soil_state.iday` must hold `1..=3`; invalid `0` values are safely ignored in `nzd` accumulation rather than panicking.
+
+## 2.3.1
+- **status:** done
+- **files changed:** `crates/newhall-core/src/engine.rs` (468 lines; +468/-1), `crates/newhall-core/src/lib.rs` (18 lines; +5/-1)
+- **commit:** `04ccda7` (`feat(core): wire SimEngine runner, SoA batch execution, and public re-exports`)
+- **verification:** `cargo test --workspace` (exit 0; 29 passed in `newhall-core`, 0 in `newhall-cli`), `cargo test --workspace --no-default-features` (exit 0; 29 passed), `cargo test -p newhall-core --no-default-features` (exit 0; 29 passed sequential fallback)
+- **deviations:** also ran `cargo test -p newhall-core --no-default-features` to explicitly exercise the non-`parallel` code path (`--workspace --no-default-features` still pulls `newhall-core` default `parallel` via `newhall-cli`).
+- **gotchas for dependent tasks:**
+  - `SoaBatchInput<'a>` represents monthly inputs (`temp_c`, `precip_mm`) as `[&'a [f64]; 12]` column slices (`[0..12]` = Jan..Dec), matching CSV/R `data.frame` columns and column-major matrices with zero copy.
+  - `run_batch_soa` / `run_batch_soa_into` validate equal slice lengths via `SoaBatchInput::validate()` and preserve `f64::NAN` `awc_mm` without panicking (`SiteOutput.water_holding_capacity` stays `NaN`).
