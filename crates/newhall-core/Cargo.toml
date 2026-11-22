@@ -1,0 +1,13 @@
+[package]
+name = "newhall-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure-Rust Newhall Simulation Model core engine and physics traits"
+license = "MIT"
+
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
+
+[dependencies]
+rayon = { version = "1", optional = true }

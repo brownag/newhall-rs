@@ -1,0 +1,550 @@
+//! Core `Copy` data types, `#[repr(u8)]` regime discriminants, and input/output schemas
+//! for the Newhall Simulation Model (`jNSMR` / `newhall-1.6.5.jar` parity contract).
+
+/// Geographic hemisphere derived from latitude (`lat_dd >= 0.0` => North).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Hemisphere {
+    North,
+    South,
+}
+
+/// Soil Temperature Regime (STR), `0..=9` matching `jNSMR` `terra::set.cats()` codes.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TemperatureRegime {
+    Pergelic = 0,
+    Cryic = 1,
+    Frigid = 2,
+    Mesic = 3,
+    Thermic = 4,
+    Hyperthermic = 5,
+    Isofrigid = 6,
+    Isomesic = 7,
+    Isothermic = 8,
+    Isohyperthermic = 9,
+}
+
+impl TemperatureRegime {
+    /// Exact Java `BASICSimulationModel` string representation.
+    pub const fn as_java_str(self) -> &'static str {
+        match self {
+            Self::Pergelic => "Pergelic",
+            Self::Cryic => "Cryic",
+            Self::Frigid => "Frigid",
+            Self::Mesic => "Mesic",
+            Self::Thermic => "Thermic",
+            Self::Hyperthermic => "Hyperthermic",
+            Self::Isofrigid => "Isofrigid",
+            Self::Isomesic => "Isomesic",
+            Self::Isothermic => "Isothermic",
+            Self::Isohyperthermic => "Isohyperthermic",
+        }
+    }
+
+    /// Exact R `jNSMR` factor label (`.str()`).
+    pub const fn as_r_label(self) -> &'static str {
+        self.as_java_str()
+    }
+
+    /// Converts a 0-indexed `u8` discriminant back into `TemperatureRegime`.
+    pub const fn from_u8(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::Pergelic),
+            1 => Some(Self::Cryic),
+            2 => Some(Self::Frigid),
+            3 => Some(Self::Mesic),
+            4 => Some(Self::Thermic),
+            5 => Some(Self::Hyperthermic),
+            6 => Some(Self::Isofrigid),
+            7 => Some(Self::Isomesic),
+            8 => Some(Self::Isothermic),
+            9 => Some(Self::Isohyperthermic),
+            _ => None,
+        }
+    }
+}
+
+/// Soil Moisture Regime (SMR), `0..=5` matching `jNSMR` `terra::set.cats()` codes.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MoistureRegime {
+    Aridic = 0,
+    Ustic = 1,
+    Xeric = 2,
+    Udic = 3,
+    Perudic = 4,
+    Undefined = 5,
+}
+
+impl MoistureRegime {
+    /// Exact Java `BASICSimulationModel` string representation.
+    pub const fn as_java_str(self) -> &'static str {
+        match self {
+            Self::Aridic => "Aridic",
+            Self::Ustic => "Ustic",
+            Self::Xeric => "Xeric",
+            Self::Udic => "Udic",
+            Self::Perudic => "Perudic",
+            Self::Undefined => "Undefined",
+        }
+    }
+
+    /// Exact R `jNSMR` factor label (`.smr()`).
+    pub const fn as_r_label(self) -> &'static str {
+        self.as_java_str()
+    }
+
+    /// Converts a 0-indexed `u8` discriminant back into `MoistureRegime`.
+    pub const fn from_u8(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::Aridic),
+            1 => Some(Self::Ustic),
+            2 => Some(Self::Xeric),
+            3 => Some(Self::Udic),
+            4 => Some(Self::Perudic),
+            5 => Some(Self::Undefined),
+            _ => None,
+        }
+    }
+}
+
+/// Soil Moisture Regime Subdivision 1 (`0..=8`, holds Java modifier `q` per Defect #8).
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RegimeSubdivision1 {
+    Typic = 0,
+    Weak = 1,
+    Wet = 2,
+    Dry = 3,
+    Extreme = 4,
+    Xeric = 5,
+    Udic = 6,
+    Aridic = 7,
+    Undefined = 8,
+}
+
+impl RegimeSubdivision1 {
+    /// Exact Java `BASICSimulationModel` string representation (`" "` when undefined).
+    pub const fn as_java_str(self) -> &'static str {
+        match self {
+            Self::Typic => "Typic",
+            Self::Weak => "Weak",
+            Self::Wet => "Wet",
+            Self::Dry => "Dry",
+            Self::Extreme => "Extreme",
+            Self::Xeric => "Xeric",
+            Self::Udic => "Udic",
+            Self::Aridic => "Aridic",
+            Self::Undefined => " ",
+        }
+    }
+
+    /// Exact R `jNSMR` factor label (`.smrsub1()`), mapping `" "` to `"Undefined"`.
+    pub const fn as_r_label(self) -> &'static str {
+        match self {
+            Self::Typic => "Typic",
+            Self::Weak => "Weak",
+            Self::Wet => "Wet",
+            Self::Dry => "Dry",
+            Self::Extreme => "Extreme",
+            Self::Xeric => "Xeric",
+            Self::Udic => "Udic",
+            Self::Aridic => "Aridic",
+            Self::Undefined => "Undefined",
+        }
+    }
+
+    /// Converts a 0-indexed `u8` discriminant back into `RegimeSubdivision1`.
+    pub const fn from_u8(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::Typic),
+            1 => Some(Self::Weak),
+            2 => Some(Self::Wet),
+            3 => Some(Self::Dry),
+            4 => Some(Self::Extreme),
+            5 => Some(Self::Xeric),
+            6 => Some(Self::Udic),
+            7 => Some(Self::Aridic),
+            8 => Some(Self::Undefined),
+            _ => None,
+        }
+    }
+}
+
+/// Soil Moisture Regime Subdivision 2 (`0..=7`, holds Java group `div` per Defect #8).
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RegimeSubdivision2 {
+    Aridic = 0,
+    Tempustic = 1,
+    Tropustic = 2,
+    Tempudic = 3,
+    Xeric = 4,
+    Udic = 5,
+    Tropudic = 6,
+    Undefined = 7,
+}
+
+impl RegimeSubdivision2 {
+    /// Exact Java `BASICSimulationModel` string representation.
+    ///
+    /// Note: For `MoistureRegime::Perudic`, Java emits `" "` rather than `"Undefined"`;
+    /// use [`SiteOutput::regime_subdivision2_java_str`] when formatting full outputs.
+    pub const fn as_java_str(self) -> &'static str {
+        match self {
+            Self::Aridic => "Aridic",
+            Self::Tempustic => "Tempustic",
+            Self::Tropustic => "Tropustic",
+            Self::Tempudic => "Tempudic",
+            Self::Xeric => "Xeric",
+            Self::Udic => "Udic",
+            Self::Tropudic => "Tropudic",
+            Self::Undefined => "Undefined",
+        }
+    }
+
+    /// Exact R `jNSMR` factor label (`.smrsub2()`).
+    pub const fn as_r_label(self) -> &'static str {
+        self.as_java_str()
+    }
+
+    /// Converts a 0-indexed `u8` discriminant back into `RegimeSubdivision2`.
+    pub const fn from_u8(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::Aridic),
+            1 => Some(Self::Tempustic),
+            2 => Some(Self::Tropustic),
+            3 => Some(Self::Tempudic),
+            4 => Some(Self::Xeric),
+            5 => Some(Self::Udic),
+            6 => Some(Self::Tropudic),
+            7 => Some(Self::Undefined),
+            _ => None,
+        }
+    }
+}
+
+/// Per-site climate and soil input parameters (stack-allocated, `Copy`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SiteInput {
+    pub lat_dd: f64,
+    pub lon_dd: f64,
+    /// Monthly mean air temperature (°C), Jan..Dec (`[0..12]`).
+    pub temp_c: [f64; 12],
+    /// Monthly precipitation (mm), Jan..Dec (`[0..12]`).
+    pub precip_mm: [f64; 12],
+    /// Available water capacity (mm; standard default `200.0`).
+    pub awc_mm: f64,
+    /// Elevation (m; unused in `runSimulation(double[], ...)`).
+    pub elev_m: f64,
+}
+
+impl SiteInput {
+    /// Derives hemisphere from `lat_dd` matching `jNSMR::batch3()` (`lat_dd >= 0.0 => North`).
+    #[inline]
+    pub fn hemisphere(&self) -> Hemisphere {
+        if self.lat_dd >= 0.0 {
+            Hemisphere::North
+        } else {
+            Hemisphere::South
+        }
+    }
+}
+
+/// Per-site soil thermal and configuration flags (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SiteConfig {
+    /// Soil-air temperature offset (°C; default `2.5`).
+    pub soil_air_offset: f64,
+    /// Soil-to-air temperature amplitude ratio (`fcd`; default `0.66`).
+    pub amplitude: f64,
+    /// Presence of an organic O-horizon (`false` by default).
+    pub has_o_horizon: bool,
+    /// Saturation at 50 cm depth (`false` by default).
+    pub is_saturated: bool,
+    /// Stored for `jNSMR` parity (Defect #2: must NOT trigger unit conversions in `newhall-core`).
+    pub is_metric: bool,
+}
+
+impl Default for SiteConfig {
+    fn default() -> Self {
+        Self {
+            soil_air_offset: 2.5,
+            amplitude: 0.66,
+            has_o_horizon: false,
+            is_saturated: false,
+            is_metric: true,
+        }
+    }
+}
+
+/// Stack-allocated 8×8 soil moisture state and 360-day calendar (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SoilState {
+    /// 64-slot soil moisture profile (`sl[1..=64]` in Java mapped to `0..64`).
+    pub profile: [f64; 64],
+    /// 360-day moisture condition calendar (`1` = Dry, `2` = Moist/Dry, `3` = Moist).
+    pub iday: [u8; 360],
+    /// Cumulative days Dry (`nd[0]`), Moist/Dry (`nd[1]`), and Moist (`nd[2]`).
+    pub nd: [f64; 3],
+}
+
+impl Default for SoilState {
+    fn default() -> Self {
+        Self {
+            profile: [0.0; 64],
+            iday: [0; 360],
+            nd: [0.0; 3],
+        }
+    }
+}
+
+/// Thornthwaite monthly PET and seasonal water balance summary (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WaterBalance {
+    /// Adjusted monthly potential evapotranspiration (`mpe`, mm), Jan..Dec (`[0..12]`).
+    pub mpe: [f64; 12],
+    pub annual_rainfall: f64,
+    pub annual_pet: f64,
+    pub annual_water_balance: f64,
+    pub summer_water_balance: f64,
+}
+
+impl Default for WaterBalance {
+    fn default() -> Self {
+        Self {
+            mpe: [0.0; 12],
+            annual_rainfall: 0.0,
+            annual_pet: 0.0,
+            annual_water_balance: 0.0,
+            summer_water_balance: 0.0,
+        }
+    }
+}
+
+/// All 10 integer day-counter outputs produced by the simulation (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DayCounters {
+    pub dry_days_after_summer_solstice: i32,
+    pub moist_days_after_winter_solstice: i32,
+    pub num_cumulative_days_dry: i32,
+    pub num_cumulative_days_moist_dry: i32,
+    pub num_cumulative_days_moist: i32,
+    pub num_cumulative_days_dry_over_5c: i32,
+    pub num_cumulative_days_moist_dry_over_5c: i32,
+    pub num_cumulative_days_moist_over_5c: i32,
+    pub num_consecutive_days_moist_in_some_parts: i32,
+    pub num_consecutive_days_moist_in_some_parts_over_8c: i32,
+}
+
+/// Output from [`crate::traits::ThermalModel::evaluate`] (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThermalClassification {
+    pub day_counters: DayCounters,
+    pub temperature_regime: Option<TemperatureRegime>,
+    pub moisture_regime: MoistureRegime,
+    pub regime_subdivision1: RegimeSubdivision1,
+    pub regime_subdivision2: RegimeSubdivision2,
+}
+
+/// Complete 19-field simulation output matching `jNSMR::batch3()` (`Copy`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SiteOutput {
+    pub annual_rainfall: f64,
+    pub water_holding_capacity: f64,
+    pub annual_water_balance: f64,
+    pub annual_potential_evapotranspiration: f64,
+    pub summer_water_balance: f64,
+    pub dry_days_after_summer_solstice: i32,
+    pub moist_days_after_winter_solstice: i32,
+    pub num_cumulative_days_dry: i32,
+    pub num_cumulative_days_moist_dry: i32,
+    pub num_cumulative_days_moist: i32,
+    pub num_cumulative_days_dry_over_5c: i32,
+    pub num_cumulative_days_moist_dry_over_5c: i32,
+    pub num_cumulative_days_moist_over_5c: i32,
+    pub num_consecutive_days_moist_in_some_parts: i32,
+    pub num_consecutive_days_moist_in_some_parts_over_8c: i32,
+    /// `None` represents Java `""` / R `NA` when temperature contains `NaN`.
+    pub temperature_regime: Option<TemperatureRegime>,
+    pub moisture_regime: MoistureRegime,
+    pub regime_subdivision1: RegimeSubdivision1,
+    pub regime_subdivision2: RegimeSubdivision2,
+}
+
+impl SiteOutput {
+    /// Exact Java string for `temperatureRegime` (`""` when `None`).
+    #[inline]
+    pub const fn temperature_regime_java_str(&self) -> &'static str {
+        match self.temperature_regime {
+            Some(r) => r.as_java_str(),
+            None => "",
+        }
+    }
+
+    /// Exact Java string for `moistureRegime`.
+    #[inline]
+    pub const fn moisture_regime_java_str(&self) -> &'static str {
+        self.moisture_regime.as_java_str()
+    }
+
+    /// Exact Java string for `regimeSubdivision1` (`" "` when undefined).
+    #[inline]
+    pub const fn regime_subdivision1_java_str(&self) -> &'static str {
+        self.regime_subdivision1.as_java_str()
+    }
+
+    /// Exact Java string for `regimeSubdivision2` (`" "` for `Perudic`, `"Undefined"` for `Undefined`).
+    #[inline]
+    pub const fn regime_subdivision2_java_str(&self) -> &'static str {
+        if matches!(self.moisture_regime, MoistureRegime::Perudic)
+            && matches!(self.regime_subdivision2, RegimeSubdivision2::Undefined)
+        {
+            " "
+        } else {
+            self.regime_subdivision2.as_java_str()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_copy<T: Copy>() {}
+
+    #[test]
+    fn all_core_types_are_copy() {
+        assert_copy::<Hemisphere>();
+        assert_copy::<TemperatureRegime>();
+        assert_copy::<MoistureRegime>();
+        assert_copy::<RegimeSubdivision1>();
+        assert_copy::<RegimeSubdivision2>();
+        assert_copy::<SiteInput>();
+        assert_copy::<SiteConfig>();
+        assert_copy::<SoilState>();
+        assert_copy::<WaterBalance>();
+        assert_copy::<DayCounters>();
+        assert_copy::<ThermalClassification>();
+        assert_copy::<SiteOutput>();
+    }
+
+    #[test]
+    fn temperature_regime_discriminants_and_labels() {
+        let cases = [
+            (0_u8, TemperatureRegime::Pergelic, "Pergelic"),
+            (1, TemperatureRegime::Cryic, "Cryic"),
+            (2, TemperatureRegime::Frigid, "Frigid"),
+            (3, TemperatureRegime::Mesic, "Mesic"),
+            (4, TemperatureRegime::Thermic, "Thermic"),
+            (5, TemperatureRegime::Hyperthermic, "Hyperthermic"),
+            (6, TemperatureRegime::Isofrigid, "Isofrigid"),
+            (7, TemperatureRegime::Isomesic, "Isomesic"),
+            (8, TemperatureRegime::Isothermic, "Isothermic"),
+            (9, TemperatureRegime::Isohyperthermic, "Isohyperthermic"),
+        ];
+        for (code, variant, label) in cases {
+            assert_eq!(variant as u8, code);
+            assert_eq!(TemperatureRegime::from_u8(code), Some(variant));
+            assert_eq!(variant.as_java_str(), label);
+            assert_eq!(variant.as_r_label(), label);
+        }
+        assert_eq!(TemperatureRegime::from_u8(10), None);
+    }
+
+    #[test]
+    fn moisture_regime_discriminants_and_labels() {
+        let cases = [
+            (0_u8, MoistureRegime::Aridic, "Aridic"),
+            (1, MoistureRegime::Ustic, "Ustic"),
+            (2, MoistureRegime::Xeric, "Xeric"),
+            (3, MoistureRegime::Udic, "Udic"),
+            (4, MoistureRegime::Perudic, "Perudic"),
+            (5, MoistureRegime::Undefined, "Undefined"),
+        ];
+        for (code, variant, label) in cases {
+            assert_eq!(variant as u8, code);
+            assert_eq!(MoistureRegime::from_u8(code), Some(variant));
+            assert_eq!(variant.as_java_str(), label);
+            assert_eq!(variant.as_r_label(), label);
+        }
+        assert_eq!(MoistureRegime::from_u8(6), None);
+    }
+
+    #[test]
+    fn subdivision1_discriminants_and_blank_vs_undefined() {
+        let cases = [
+            (0_u8, RegimeSubdivision1::Typic, "Typic", "Typic"),
+            (1, RegimeSubdivision1::Weak, "Weak", "Weak"),
+            (2, RegimeSubdivision1::Wet, "Wet", "Wet"),
+            (3, RegimeSubdivision1::Dry, "Dry", "Dry"),
+            (4, RegimeSubdivision1::Extreme, "Extreme", "Extreme"),
+            (5, RegimeSubdivision1::Xeric, "Xeric", "Xeric"),
+            (6, RegimeSubdivision1::Udic, "Udic", "Udic"),
+            (7, RegimeSubdivision1::Aridic, "Aridic", "Aridic"),
+            (8, RegimeSubdivision1::Undefined, " ", "Undefined"),
+        ];
+        for (code, variant, java_s, r_lbl) in cases {
+            assert_eq!(variant as u8, code);
+            assert_eq!(RegimeSubdivision1::from_u8(code), Some(variant));
+            assert_eq!(variant.as_java_str(), java_s);
+            assert_eq!(variant.as_r_label(), r_lbl);
+        }
+        assert_eq!(RegimeSubdivision1::from_u8(9), None);
+    }
+
+    #[test]
+    fn subdivision2_discriminants_and_perudic_java_str() {
+        let cases = [
+            (0_u8, RegimeSubdivision2::Aridic, "Aridic"),
+            (1, RegimeSubdivision2::Tempustic, "Tempustic"),
+            (2, RegimeSubdivision2::Tropustic, "Tropustic"),
+            (3, RegimeSubdivision2::Tempudic, "Tempudic"),
+            (4, RegimeSubdivision2::Xeric, "Xeric"),
+            (5, RegimeSubdivision2::Udic, "Udic"),
+            (6, RegimeSubdivision2::Tropudic, "Tropudic"),
+            (7, RegimeSubdivision2::Undefined, "Undefined"),
+        ];
+        for (code, variant, label) in cases {
+            assert_eq!(variant as u8, code);
+            assert_eq!(RegimeSubdivision2::from_u8(code), Some(variant));
+            assert_eq!(variant.as_java_str(), label);
+            assert_eq!(variant.as_r_label(), label);
+        }
+        assert_eq!(RegimeSubdivision2::from_u8(8), None);
+
+        let base = SiteOutput {
+            annual_rainfall: 0.0,
+            water_holding_capacity: 200.0,
+            annual_water_balance: 0.0,
+            annual_potential_evapotranspiration: 0.0,
+            summer_water_balance: 0.0,
+            dry_days_after_summer_solstice: 0,
+            moist_days_after_winter_solstice: 0,
+            num_cumulative_days_dry: 0,
+            num_cumulative_days_moist_dry: 0,
+            num_cumulative_days_moist: 360,
+            num_cumulative_days_dry_over_5c: 0,
+            num_cumulative_days_moist_dry_over_5c: 0,
+            num_cumulative_days_moist_over_5c: 0,
+            num_consecutive_days_moist_in_some_parts: 360,
+            num_consecutive_days_moist_in_some_parts_over_8c: 0,
+            temperature_regime: None,
+            moisture_regime: MoistureRegime::Perudic,
+            regime_subdivision1: RegimeSubdivision1::Undefined,
+            regime_subdivision2: RegimeSubdivision2::Undefined,
+        };
+        assert_eq!(base.temperature_regime_java_str(), "");
+        assert_eq!(base.regime_subdivision1_java_str(), " ");
+        assert_eq!(base.regime_subdivision2_java_str(), " ");
+
+        let undef = SiteOutput {
+            moisture_regime: MoistureRegime::Undefined,
+            temperature_regime: Some(TemperatureRegime::Cryic),
+            ..base
+        };
+        assert_eq!(undef.temperature_regime_java_str(), "Cryic");
+        assert_eq!(undef.regime_subdivision1_java_str(), " ");
+        assert_eq!(undef.regime_subdivision2_java_str(), "Undefined");
+    }
+}

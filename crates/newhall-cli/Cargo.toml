@@ -1,0 +1,9 @@
+[package]
+name = "newhall-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI runner and benchmark harness for the Newhall Simulation Model"
+license = "MIT"
+
+[dependencies]
+newhall-core = { path = "../newhall-core" }

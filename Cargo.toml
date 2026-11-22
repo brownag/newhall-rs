@@ -1,0 +1,4 @@
+[workspace]
+members = ["crates/newhall-core", "crates/newhall-cli"]
+exclude = ["r-pkg/src/rust"]
+resolver = "2"
