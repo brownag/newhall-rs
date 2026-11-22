@@ -18,7 +18,7 @@ Last Updated: 2026-11-22
 | 2 | `2.2.2` | Implement 8×8 soil moisture loop & 360-day calendar (`hydrology.rs`) | done | flash | `a8d5f8b` |
 | 2 | `2.2.3` | Implement thermal model, day counters & STR/SMR classifiers (`thermal.rs`) | done | flash | `2da24ae` |
 | 3 | `2.3.1` | Wire `SimEngine`, SoA batch runner (`engine.rs`), and `lib.rs` exports | done | flash | `04ccda7` |
-| 4 | `2.4.1` | Add golden-master integration tests (`golden_master.rs`) & verify parity | pending | flash | — |
+| 4 | `2.4.1` | Add golden-master integration tests (`golden_master.rs`) & verify parity | done | flash | `695c0a8` |
 
 ## Task Reports
 
@@ -75,3 +75,13 @@ Last Updated: 2026-11-22
 - **gotchas for dependent tasks:**
   - `SoaBatchInput<'a>` represents monthly inputs (`temp_c`, `precip_mm`) as `[&'a [f64]; 12]` column slices (`[0..12]` = Jan..Dec), matching CSV/R `data.frame` columns and column-major matrices with zero copy.
   - `run_batch_soa` / `run_batch_soa_into` validate equal slice lengths via `SoaBatchInput::validate()` and preserve `f64::NAN` `awc_mm` without panicking (`SiteOutput.water_holding_capacity` stays `NaN`).
+
+## 2.4.1
+- **status:** done
+- **files created:** `crates/newhall-core/tests/golden_master.rs` (435 lines)
+- **commit:** `695c0a8` (`test(core): add golden-master integration tests verifying jNSMR parity`)
+- **verification:** `cargo test --workspace --release` (exit 0; 29 unit tests + 4 golden-master integration tests passed, 0 failed)
+- **deviations:** none
+- **gotchas for dependent tasks:**
+  - `pa_batch_metric.csv` includes `Perudic` rows with `" "` in `regimeSubdivision1` and `regimeSubdivision2`; `SiteOutput::regime_subdivision2_java_str()` (not `RegimeSubdivision2::as_java_str()` alone) is required for exact Java CSV parity.
+  - Both `simulate_site` and `run_batch_soa` pass all 38,076 rows (37,688 valid within `1e-9` floats / exact `i32` / 100% categoricals, plus 388 `awc == "NA"` rows yielding `NaN` `water_holding_capacity` without panicking).
