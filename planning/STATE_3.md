@@ -17,8 +17,8 @@ Last Updated: 2026-11-22
 | 1 | `3.1.1` | Implement `StrictThornthwaiteForcing` (`#1`, `#2`, `#7`, `#9`) | done | flash | `488ae8b` |
 | 1 | `3.1.2` | Implement `StrictThermal` (`#2`, `#3`, `#4`, `#5`, `#6`, `#8`, `#9`, `#10`) | done | flash | `5deb0f3` |
 | 2 | `3.2.1` | Wire `StrictHydrology`, `StrictNewhall`, and `lib.rs` exports | done | flash | `eab2740` |
-| 3 | `3.3.1` | Expose `strict` and `strict_forcing` in `r-pkg` + `testthat` | pending | flash | — |
-| 3 | `3.3.2` | Add `strict_mode.rs` integration tests verifying Defects #1–#10 | pending | flash | — |
+| 3 | `3.3.1` | Expose `strict` and `strict_forcing` in `r-pkg` + `testthat` | done | flash | `59e515e` |
+| 3 | `3.3.2` | Add `strict_mode.rs` integration tests verifying Defects #1–#10 | done | flash | `6b2ac04` |
 
 ## Task Reports
 
@@ -47,3 +47,19 @@ Last Updated: 2026-11-22
 - **Verification:** `cargo test --workspace --all-targets` (43 unit + 13 adversarial + 4 golden-master green), clippy & fmt clean
 - **Deviations:** Used `ClassicHydrology.simulate_hydrology(...)` unit-struct syntax instead of `ClassicHydrology::default()` to satisfy `clippy::default-constructed-unit-structs`.
 - **Gotchas for dependent tasks:** `StrictNewhall`, `StrictHydrology`, `StrictThornthwaiteForcing`, and `StrictThermal` are now exported at `newhall_core::*`; `SimEngine::run` sets `SiteOutput.water_holding_capacity` to raw `input.awc_mm` (unscaled when `is_metric = false`), while forcing, hydrology, day counters, and regimes use converted metric units.
+
+## 3.3.1
+- **Status:** `done`
+- **Files created/changed:** `r-pkg/src/rust/src/lib.rs`, `r-pkg/R/newhall.R`, `r-pkg/R/extendr-wrappers.R`, `r-pkg/man/newhall_batch.Rd`, `r-pkg/man/newhall_batch_phase4.Rd`, `r-pkg/tests/testthat/test-phase4.R`; `planning/tasks/3.3.1.todo.md`
+- **Code commit ID:** `59e515e` (cherry-picked from `a2aedc6`)
+- **Verification:** `devtools::test('r-pkg')` (`27` PASS, `0` FAIL, `0` WARN, `0` SKIP after rebuilding `libnewhallrs.a`)
+- **Deviations:** none
+- **Gotchas for dependent tasks:** `newhall_batch` defaults `strict = FALSE` for `jNSMR` parity, whereas `newhall_batch_phase4` defaults `strict_forcing = TRUE`; when `is_metric = FALSE` and `strict = TRUE`, callers pass `soil_air_offset` in °F difference and `waterHoldingCapacity` retains raw `awc` input units.
+
+## 3.3.2
+- **Status:** `done`
+- **Files created/changed:** `crates/newhall-core/tests/strict_mode.rs` (548 lines); `planning/tasks/3.3.2.todo.md`
+- **Code commit ID:** `6b2ac04` (cherry-picked from `ac5746a`)
+- **Verification:** `cargo test --workspace --all-targets` (`43` unit + `13` adversarial + `4` golden-master + `8` strict_mode green), `clippy` & `fmt` clean
+- **Deviations:** none
+- **Gotchas for dependent tasks:** none
