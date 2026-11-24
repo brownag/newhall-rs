@@ -1,14 +1,42 @@
 //! Static-dispatch simulation runner (`SimEngine::run`), classic defaults,
 //! and Struct-of-Arrays (SoA) batch execution.
 
-use crate::forcing::ThornthwaiteForcing;
+use crate::forcing::{StrictThornthwaiteForcing, ThornthwaiteForcing};
 use crate::hydrology::ClassicHydrology;
-use crate::thermal::ClassicThermal;
+use crate::thermal::{ClassicThermal, StrictThermal};
 use crate::traits::{ForcingModel, HydrologyStep, SimEngine, ThermalModel};
-use crate::types::{SiteConfig, SiteInput, SiteOutput};
+use crate::types::{SiteConfig, SiteInput, SiteOutput, SoilState, WaterBalance};
 
 /// Default classic Newhall engine matching `jNSMR` / `newhall-1.6.5.jar` (`runBatch2`).
 pub type ClassicNewhall = SimEngine<ClassicThermal, ThornthwaiteForcing, ClassicHydrology>;
+
+/// Strict Newhall 8×8 soil moisture hydrology step converting imperial `precip_mm` and `awc_mm`
+/// to millimeters when `!config.is_metric` before delegating to [`ClassicHydrology`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StrictHydrology;
+
+impl HydrologyStep for StrictHydrology {
+    fn simulate_hydrology(
+        &self,
+        input: &SiteInput,
+        config: &SiteConfig,
+        water_balance: &WaterBalance,
+    ) -> SoilState {
+        if config.is_metric {
+            ClassicHydrology.simulate_hydrology(input, config, water_balance)
+        } else {
+            let mut metric_input = *input;
+            for p in &mut metric_input.precip_mm {
+                *p *= 25.4;
+            }
+            metric_input.awc_mm *= 25.4;
+            ClassicHydrology.simulate_hydrology(&metric_input, config, water_balance)
+        }
+    }
+}
+
+/// Opt-in defect-remediated Newhall simulation engine (`StrictThermal`, `StrictThornthwaiteForcing`, `StrictHydrology`).
+pub type StrictNewhall = SimEngine<StrictThermal, StrictThornthwaiteForcing, StrictHydrology>;
 
 /// Struct-of-Arrays (SoA) flat slice view over `n` simulation sites.
 ///
@@ -462,5 +490,206 @@ mod tests {
             elev_m: &one,
         };
         let _ = run_batch_soa(&batch, &SiteConfig::default());
+    }
+
+    #[test]
+    fn strict_hydrology_converts_imperial_inputs_when_not_metric() {
+        let metric = sample_nh_site();
+        let metric_cfg = SiteConfig::default();
+        let wb = StrictThornthwaiteForcing.compute_water_balance(&metric, &metric_cfg);
+
+        // Metric StrictHydrology matches ClassicHydrology bit-for-bit.
+        let classic_ss = ClassicHydrology.simulate_hydrology(&metric, &metric_cfg, &wb);
+        let strict_metric_ss = StrictHydrology.simulate_hydrology(&metric, &metric_cfg, &wb);
+        assert_eq!(strict_metric_ss, classic_ss);
+
+        // Imperial inputs (inches for precip_mm and awc_mm) with is_metric = false match metric.
+        let mut imperial = metric;
+        for p in &mut imperial.precip_mm {
+            *p /= 25.4;
+        }
+        imperial.awc_mm /= 25.4;
+        let imperial_cfg = SiteConfig {
+            is_metric: false,
+            ..SiteConfig::default()
+        };
+
+        let strict_imperial_ss = StrictHydrology.simulate_hydrology(&imperial, &imperial_cfg, &wb);
+        assert_eq!(strict_imperial_ss.iday, classic_ss.iday);
+        assert_eq!(strict_imperial_ss.sat_days_mcs, classic_ss.sat_days_mcs);
+        for i in 0..3 {
+            assert!(
+                (strict_imperial_ss.nd[i] - classic_ss.nd[i]).abs() < 1e-9,
+                "nd[{i}] mismatch: {} vs {}",
+                strict_imperial_ss.nd[i],
+                classic_ss.nd[i]
+            );
+        }
+        for i in 0..64 {
+            assert!(
+                (strict_imperial_ss.profile[i] - classic_ss.profile[i]).abs() < 1e-9,
+                "profile[{i}] mismatch: {} vs {}",
+                strict_imperial_ss.profile[i],
+                classic_ss.profile[i]
+            );
+        }
+    }
+
+    #[test]
+    fn strict_newhall_matches_manual_trait_pipeline_and_soa_batch() {
+        let sites = [
+            sample_nh_site(),
+            sample_sh_site(),
+            sample_cold_site(),
+            sample_nan_awc_site(),
+        ];
+        let config = SiteConfig::default();
+        let engine = StrictNewhall::default();
+
+        for site in &sites {
+            let out = engine.run(site, &config);
+            let wb = StrictThornthwaiteForcing.compute_water_balance(site, &config);
+            let ss = StrictHydrology.simulate_hydrology(site, &config, &wb);
+            let tc = StrictThermal.evaluate(site, &config, &wb, &ss);
+
+            assert_eq!(out.annual_rainfall.to_bits(), wb.annual_rainfall.to_bits());
+            assert_eq!(
+                out.annual_potential_evapotranspiration.to_bits(),
+                wb.annual_pet.to_bits()
+            );
+            assert_eq!(out.temperature_regime, tc.temperature_regime);
+            assert_eq!(out.moisture_regime, tc.moisture_regime);
+            assert_eq!(
+                out.num_cumulative_days_moist,
+                tc.day_counters.num_cumulative_days_moist
+            );
+        }
+
+        // Southern Hemisphere site should fix Defect #1/#7 relative to ClassicNewhall.
+        let sh = sample_sh_site();
+        let strict_sh = engine.run(&sh, &config);
+        let classic_sh = ClassicNewhall::default().run(&sh, &config);
+        assert!(strict_sh.annual_potential_evapotranspiration > 0.0);
+        assert_ne!(
+            strict_sh.annual_potential_evapotranspiration.to_bits(),
+            classic_sh.annual_potential_evapotranspiration.to_bits()
+        );
+
+        let lat_dd: Vec<f64> = sites.iter().map(|s| s.lat_dd).collect();
+        let lon_dd: Vec<f64> = sites.iter().map(|s| s.lon_dd).collect();
+        let awc_mm: Vec<f64> = sites.iter().map(|s| s.awc_mm).collect();
+        let elev_m: Vec<f64> = sites.iter().map(|s| s.elev_m).collect();
+        let temp_cols: [Vec<f64>; 12] =
+            std::array::from_fn(|m| sites.iter().map(|s| s.temp_c[m]).collect());
+        let precip_cols: [Vec<f64>; 12] =
+            std::array::from_fn(|m| sites.iter().map(|s| s.precip_mm[m]).collect());
+
+        let batch = SoaBatchInput {
+            lat_dd: &lat_dd,
+            lon_dd: &lon_dd,
+            temp_c: std::array::from_fn(|m| temp_cols[m].as_slice()),
+            precip_mm: std::array::from_fn(|m| precip_cols[m].as_slice()),
+            awc_mm: &awc_mm,
+            elev_m: &elev_m,
+        };
+
+        let batch_out = engine.run_batch_soa(&batch, &config);
+        let mut into_out = vec![engine.run(&sites[0], &config); sites.len()];
+        engine.run_batch_soa_into(&batch, &config, &mut into_out);
+
+        for (i, site) in sites.iter().enumerate() {
+            let expected = engine.run(site, &config);
+            assert_site_output_eq(&batch_out[i], &expected);
+            assert_site_output_eq(&into_out[i], &expected);
+        }
+    }
+
+    #[test]
+    fn strict_newhall_is_metric_false_converts_all_units() {
+        let metric = sample_nh_site();
+        let metric_cfg = SiteConfig::default();
+
+        let mut imperial = metric;
+        for m in 0..12 {
+            imperial.temp_c[m] = metric.temp_c[m] * 9.0 / 5.0 + 32.0;
+            imperial.precip_mm[m] = metric.precip_mm[m] / 25.4;
+        }
+        imperial.awc_mm = metric.awc_mm / 25.4;
+        let imperial_cfg = SiteConfig {
+            soil_air_offset: metric_cfg.soil_air_offset * 9.0 / 5.0,
+            is_metric: false,
+            ..metric_cfg
+        };
+
+        let engine = StrictNewhall::default();
+        let out_metric = engine.run(&metric, &metric_cfg);
+        let out_imperial = engine.run(&imperial, &imperial_cfg);
+
+        assert!((out_imperial.annual_rainfall - out_metric.annual_rainfall).abs() < 1e-9);
+        assert!((out_imperial.annual_water_balance - out_metric.annual_water_balance).abs() < 1e-9);
+        assert!(
+            (out_imperial.annual_potential_evapotranspiration
+                - out_metric.annual_potential_evapotranspiration)
+                .abs()
+                < 1e-9
+        );
+        assert!((out_imperial.summer_water_balance - out_metric.summer_water_balance).abs() < 1e-9);
+        assert_eq!(
+            out_imperial.water_holding_capacity.to_bits(),
+            imperial.awc_mm.to_bits()
+        );
+        assert_eq!(
+            out_imperial.dry_days_after_summer_solstice,
+            out_metric.dry_days_after_summer_solstice
+        );
+        assert_eq!(
+            out_imperial.moist_days_after_winter_solstice,
+            out_metric.moist_days_after_winter_solstice
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_dry,
+            out_metric.num_cumulative_days_dry
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_moist_dry,
+            out_metric.num_cumulative_days_moist_dry
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_moist,
+            out_metric.num_cumulative_days_moist
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_dry_over_5c,
+            out_metric.num_cumulative_days_dry_over_5c
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_moist_dry_over_5c,
+            out_metric.num_cumulative_days_moist_dry_over_5c
+        );
+        assert_eq!(
+            out_imperial.num_cumulative_days_moist_over_5c,
+            out_metric.num_cumulative_days_moist_over_5c
+        );
+        assert_eq!(
+            out_imperial.num_consecutive_days_moist_in_some_parts,
+            out_metric.num_consecutive_days_moist_in_some_parts
+        );
+        assert_eq!(
+            out_imperial.num_consecutive_days_moist_in_some_parts_over_8c,
+            out_metric.num_consecutive_days_moist_in_some_parts_over_8c
+        );
+        assert_eq!(
+            out_imperial.temperature_regime,
+            out_metric.temperature_regime
+        );
+        assert_eq!(out_imperial.moisture_regime, out_metric.moisture_regime);
+        assert_eq!(
+            out_imperial.regime_subdivision1,
+            out_metric.regime_subdivision1
+        );
+        assert_eq!(
+            out_imperial.regime_subdivision2,
+            out_metric.regime_subdivision2
+        );
     }
 }

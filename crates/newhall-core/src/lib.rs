@@ -9,10 +9,12 @@ pub mod traits;
 pub mod types;
 pub mod water_table;
 
-pub use engine::{run_batch_soa, simulate_site, ClassicNewhall, SoaBatchInput};
-pub use forcing::ThornthwaiteForcing;
+pub use engine::{
+    run_batch_soa, simulate_site, ClassicNewhall, SoaBatchInput, StrictHydrology, StrictNewhall,
+};
+pub use forcing::{StrictThornthwaiteForcing, ThornthwaiteForcing};
 pub use hydrology::ClassicHydrology;
-pub use thermal::ClassicThermal;
+pub use thermal::{ClassicThermal, StrictThermal};
 pub use thermal_1d::{SoilTextureClass, SoilThermalState, Thermal1DConfig, Thermal1DModel};
 pub use traits::{ForcingModel, HydrologyStep, SimEngine, ThermalModel};
 pub use types::{
