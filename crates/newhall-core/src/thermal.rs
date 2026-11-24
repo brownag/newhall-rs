@@ -140,22 +140,194 @@ impl ThermalModel for ClassicThermal {
     }
 }
 
-/// Computes `tma`, `wt`, unattenuated `dif = st - wt` (Defect #4), and STR (Defects #3, #9).
-fn classify_str(
+/// Strict Newhall thermal model and STR/SMR classifier.
+///
+/// Remediates audited `jNSMR` defects:
+/// - `#2`: converts `temp_c` (°F→°C), `precip_mm` (in→mm), and `soil_air_offset` (`* 5/9`) when `!config.is_metric`
+/// - `#3`: `tma < 0.0` always yields `TemperatureRegime::Pergelic` (never overwritten by `Frigid`/`Isofrigid`)
+/// - `#4`: uses soil-attenuated `dif = |(st - wt) * config.amplitude|` in SMR branches
+/// - `#5`: cold sites with any month `< 8.0°C` and `np8 == 0` keep `ncpm2 = 0`
+/// - `#6`: accumulates `nsd` across all `>5°C` intervals
+/// - `#8`: preserves Rust type-safe [`RegimeSubdivision1`] (`q` modifier) and [`RegimeSubdivision2`] (`div` group)
+/// - `#9`: `NaN` in precipitation, PET, temperature, or thermal config yields `MoistureRegime::Undefined`
+/// - `#10`: handles exact `5.0`/`8.0` °C plateaus cleanly without `5.01`/`8.01` perturbation
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StrictThermal;
+
+impl ThermalModel for StrictThermal {
+    fn evaluate(
+        &self,
+        input: &SiteInput,
+        config: &SiteConfig,
+        water_balance: &WaterBalance,
+        soil_state: &SoilState,
+    ) -> ThermalClassification {
+        let hemisphere = input.hemisphere();
+        let (temp, precip_mm, soil_air_offset) = normalize_metric_thermal(input, config);
+
+        let temp_has_nan = temp.iter().any(|t| t.is_nan())
+            || soil_air_offset.is_nan()
+            || config.amplitude.is_nan();
+        let precip_or_pet_has_nan =
+            precip_mm.iter().any(|p| p.is_nan()) || water_balance.mpe.iter().any(|e| e.is_nan());
+
+        let (temperature_regime, tma, wt, dif) = classify_str_strict(
+            &temp,
+            hemisphere,
+            soil_air_offset,
+            config.amplitude,
+            config.has_o_horizon,
+            config.is_saturated,
+        );
+
+        let (nsd, lt5c, ncpm1, ncpm2) = if temp_has_nan {
+            (
+                [0.0_f64; 3],
+                0.0_f64,
+                consecutive_iday_run(&soil_state.iday, 1, 720, 1, false).min(360),
+                0_i32,
+            )
+        } else {
+            // >5°C crossing solver without 5.01 perturbation (Defect #10) or has_run_already guard (Defect #6).
+            let mut nsd = [0.0_f64; 3];
+            let mut lt5c = 0.0_f64;
+            let mut skip_to_890 = false;
+
+            if temp.iter().any(|&t| t < 5.0) {
+                let (np, intervals) = find_threshold_intervals_strict(&temp, 5.0, 36, 25);
+                if np == 0 {
+                    if wt <= 5.0 {
+                        skip_to_890 = true;
+                    }
+                } else {
+                    for &(beg, end) in &intervals[..np] {
+                        let ir = interval_len(beg, end);
+                        for l in beg..=(beg + ir - 1) {
+                            let day = wrap_day(l);
+                            let ik = soil_state.iday[(day - 1) as usize];
+                            if (1..=3).contains(&ik) {
+                                nsd[(ik - 1) as usize] += 1.0;
+                            }
+                        }
+                        lt5c += ir as f64;
+                    }
+                    skip_to_890 = true;
+                }
+            }
+
+            if !skip_to_890 {
+                nsd = soil_state.nd;
+                lt5c = 360.0;
+            }
+
+            // >8°C crossing solver without 8.01 perturbation (Defect #10) or cold-site fallback (Defect #5).
+            let ncpm1 = consecutive_iday_run(&soil_state.iday, 1, 720, 1, false).min(360);
+            let ncpm2 = if temp.iter().any(|&t| t < 8.0) {
+                let (np8, intervals8) = find_threshold_intervals_strict(&temp, 8.0, 30, 30);
+                let mut max_run = 0_i32;
+                for &(beg, end) in &intervals8[..np8] {
+                    let ir = interval_len(beg, end);
+                    let icon = consecutive_iday_run(&soil_state.iday, beg, ir, 1, false);
+                    if max_run <= icon {
+                        max_run = icon;
+                    }
+                }
+                max_run
+            } else {
+                ncpm1
+            };
+
+            (nsd, lt5c, ncpm1, ncpm2)
+        };
+
+        // 120-day solstice windows.
+        let (summer_start, winter_start) = match hemisphere {
+            Hemisphere::North => (181, 1),
+            Hemisphere::South => (1, 181),
+        };
+        let nccd = consecutive_iday_run(&soil_state.iday, summer_start, 120, 1, true);
+        let nccm = consecutive_iday_run(&soil_state.iday, winter_start, 120, 3, true);
+
+        // Defect #9: any NaN in temperature, precipitation, PET, or thermal config yields Undefined SMR.
+        // Defect #8: ThermalClassification enforces typed RegimeSubdivision1 (q) & RegimeSubdivision2 (div).
+        let (moisture_regime, regime_subdivision1, regime_subdivision2) =
+            if temp_has_nan || precip_or_pet_has_nan {
+                (
+                    MoistureRegime::Undefined,
+                    RegimeSubdivision1::Undefined,
+                    RegimeSubdivision2::Undefined,
+                )
+            } else {
+                let swt_nonzero = !(0..12).any(|i| water_balance.mpe[i] > precip_mm[i]);
+                classify_smr(
+                    swt_nonzero,
+                    nsd[0],
+                    lt5c,
+                    ncpm2,
+                    soil_state.nd,
+                    tma,
+                    dif,
+                    nccd,
+                    nccm,
+                    temperature_regime,
+                )
+            };
+
+        let day_counters = DayCounters {
+            dry_days_after_summer_solstice: nccd,
+            moist_days_after_winter_solstice: nccm,
+            num_cumulative_days_dry: soil_state.nd[0] as i32,
+            num_cumulative_days_moist_dry: soil_state.nd[1] as i32,
+            num_cumulative_days_moist: soil_state.nd[2] as i32,
+            num_cumulative_days_dry_over_5c: nsd[0] as i32,
+            num_cumulative_days_moist_dry_over_5c: nsd[1] as i32,
+            num_cumulative_days_moist_over_5c: nsd[2] as i32,
+            num_consecutive_days_moist_in_some_parts: ncpm1,
+            num_consecutive_days_moist_in_some_parts_over_8c: ncpm2,
+        };
+
+        ThermalClassification {
+            day_counters,
+            temperature_regime,
+            moisture_regime,
+            regime_subdivision1,
+            regime_subdivision2,
+            aquic_bio_days: 0,
+        }
+    }
+}
+
+#[inline]
+fn normalize_metric_thermal(input: &SiteInput, config: &SiteConfig) -> ([f64; 12], [f64; 12], f64) {
+    if config.is_metric {
+        (input.temp_c, input.precip_mm, config.soil_air_offset)
+    } else {
+        let mut temp_c = [0.0_f64; 12];
+        let mut precip_mm = [0.0_f64; 12];
+        for i in 0..12 {
+            temp_c[i] = (input.temp_c[i] - 32.0) * 5.0 / 9.0;
+            precip_mm[i] = input.precip_mm[i] * 25.4;
+        }
+        (temp_c, precip_mm, config.soil_air_offset * 5.0 / 9.0)
+    }
+}
+
+#[inline]
+fn compute_str_metrics(
     temp_c: &[f64; 12],
     hemisphere: Hemisphere,
-    config: &SiteConfig,
-) -> (Option<TemperatureRegime>, f64, f64, f64) {
+    soil_air_offset: f64,
+    has_o_horizon: bool,
+    is_saturated: bool,
+) -> (f64, f64, f64, f64, f64) {
     let mut sumt = 0.0_f64;
     for &t in temp_c {
         sumt += t;
     }
 
-    let fc = config.soil_air_offset;
-    let fcd = config.amplitude;
-    let tma = sumt / 12.0 + fc;
-    let at1 = (temp_c[5] + temp_c[6] + temp_c[7]) / 3.0 + fc;
-    let at2 = (temp_c[0] + temp_c[1] + temp_c[11]) / 3.0 + fc;
+    let tma = sumt / 12.0 + soil_air_offset;
+    let at1 = (temp_c[5] + temp_c[6] + temp_c[7]) / 3.0 + soil_air_offset;
+    let at2 = (temp_c[0] + temp_c[1] + temp_c[11]) / 3.0 + soil_air_offset;
 
     let (st, wt) = match hemisphere {
         Hemisphere::North => (at1, at2),
@@ -163,12 +335,85 @@ fn classify_str(
     };
     let dif_abs = (at1 - at2).abs();
 
-    let cryic_ht = match (config.has_o_horizon, config.is_saturated) {
+    let cryic_ht = match (has_o_horizon, is_saturated) {
         (true, true) => 6.0,
         (true, false) => 8.0,
         (false, true) => 13.0,
         (false, false) => 15.0,
     };
+
+    (tma, st, wt, dif_abs, cryic_ht)
+}
+
+/// Strict STR classification: `tma < 0` always yields `Pergelic` (Defect #3),
+/// `NaN` yields `None` (Defect #9), and returned `dif` is `|(st - wt) * fcd|` (Defect #4).
+fn classify_str_strict(
+    temp_c: &[f64; 12],
+    hemisphere: Hemisphere,
+    soil_air_offset: f64,
+    amplitude: f64,
+    has_o_horizon: bool,
+    is_saturated: bool,
+) -> (Option<TemperatureRegime>, f64, f64, f64) {
+    let (tma, st, wt, dif_abs, cryic_ht) = compute_str_metrics(
+        temp_c,
+        hemisphere,
+        soil_air_offset,
+        has_o_horizon,
+        is_saturated,
+    );
+    let dif_attenuated = dif_abs * amplitude;
+
+    if tma.is_nan() || st.is_nan() || wt.is_nan() || amplitude.is_nan() {
+        return (None, tma, wt, dif_attenuated);
+    }
+
+    let is_iso = dif_attenuated < 6.0;
+    let trr = if tma < 0.0 {
+        Some(TemperatureRegime::Pergelic)
+    } else if tma < 8.0 {
+        if st >= 0.0 && st < cryic_ht {
+            Some(TemperatureRegime::Cryic)
+        } else if is_iso {
+            Some(TemperatureRegime::Isofrigid)
+        } else {
+            Some(TemperatureRegime::Frigid)
+        }
+    } else if tma < 15.0 {
+        if is_iso {
+            Some(TemperatureRegime::Isomesic)
+        } else {
+            Some(TemperatureRegime::Mesic)
+        }
+    } else if tma < 22.0 {
+        if is_iso {
+            Some(TemperatureRegime::Isothermic)
+        } else {
+            Some(TemperatureRegime::Thermic)
+        }
+    } else if is_iso {
+        Some(TemperatureRegime::Isohyperthermic)
+    } else {
+        Some(TemperatureRegime::Hyperthermic)
+    };
+
+    (trr, tma, wt, dif_attenuated)
+}
+
+/// Computes `tma`, `wt`, unattenuated `dif = st - wt` (Defect #4), and STR (Defects #3, #9).
+fn classify_str(
+    temp_c: &[f64; 12],
+    hemisphere: Hemisphere,
+    config: &SiteConfig,
+) -> (Option<TemperatureRegime>, f64, f64, f64) {
+    let fcd = config.amplitude;
+    let (tma, st, wt, dif_abs, cryic_ht) = compute_str_metrics(
+        temp_c,
+        hemisphere,
+        config.soil_air_offset,
+        config.has_o_horizon,
+        config.is_saturated,
+    );
 
     let cr1 = tma < 0.0;
     let cr2 = (0.0..8.0).contains(&tma);
@@ -213,6 +458,88 @@ fn classify_str(
     }
 
     (trr, tma, wt, st - wt)
+}
+
+/// Finds crossing intervals above `crr` (`5.0` or `8.0`) without mutating `temp` (Defect #10).
+///
+/// Consecutive `== crr` months form a plateau bounded by `t_before != crr` and `t_after != crr`
+/// (guaranteed to exist when at least one month is `< crr`). A rising crossing is emitted once
+/// at the end of a `< crr -> crr..crr -> > crr` plateau; a falling crossing is emitted once at
+/// the start of a `> crr -> crr..crr -> < crr` plateau; non-crossing touches (`< crr -> crr..crr -> < crr`
+/// or `> crr -> crr..crr -> > crr`) emit no crossing.
+fn find_threshold_intervals_strict(
+    temp: &[f64; 12],
+    crr: f64,
+    ia: i32,
+    iz: i32,
+) -> (usize, [(i32, i32); 6]) {
+    let mut nj = [0_i32; 12];
+    let mut kj = 0_usize;
+    let mut zwt = false;
+
+    for i19 in 1..=12_i32 {
+        let m0 = if i19 == 1 { 12 } else { i19 - 1 };
+        let m1 = i19;
+        let m2 = if i19 == 12 { 1 } else { i19 + 1 };
+
+        let t0 = temp[(m0 - 1) as usize];
+        let t1 = temp[(m1 - 1) as usize];
+        let t2 = temp[(m2 - 1) as usize];
+
+        if t1 < crr && t2 > crr {
+            let day = wrap_day(m0 * 30 + ia + (30.0 * (crr - t1) / (t2 - t1)) as i32);
+            nj[kj] = day;
+            kj += 1;
+            zwt = true;
+        } else if t1 > crr && t2 < crr {
+            let day = wrap_day(m0 * 30 + iz + (30.0 * (t1 - crr) / (t1 - t2)) as i32);
+            nj[kj] = day;
+            kj += 1;
+            zwt = false;
+        } else if t1 == crr && (t0 != crr || t2 != crr) {
+            let mut t_before = t0;
+            if t_before == crr {
+                for step in 1..12 {
+                    let idx = ((m1 - 1 - step).rem_euclid(12)) as usize;
+                    if temp[idx] != crr {
+                        t_before = temp[idx];
+                        break;
+                    }
+                }
+            }
+            let mut t_after = t2;
+            if t_after == crr {
+                for step in 1..12 {
+                    let idx = ((m1 - 1 + step).rem_euclid(12)) as usize;
+                    if temp[idx] != crr {
+                        t_after = temp[idx];
+                        break;
+                    }
+                }
+            }
+
+            if t_before < crr && t_after > crr && t2 > crr {
+                nj[kj] = wrap_day(m0 * 30 + ia);
+                kj += 1;
+                zwt = true;
+            } else if t_before > crr && t_after < crr && t0 > crr {
+                nj[kj] = wrap_day(m0 * 30 + iz);
+                kj += 1;
+                zwt = false;
+            }
+        }
+    }
+
+    if zwt && kj > 0 {
+        nj[..kj].rotate_left(1);
+    }
+
+    let np = kj / 2;
+    let mut intervals = [(0_i32, 0_i32); 6];
+    for i in 0..np {
+        intervals[i] = (nj[2 * i], nj[2 * i + 1]);
+    }
+    (np, intervals)
 }
 
 /// Finds crossing intervals above `crr` (`5.0` or `8.0`) on a local `temp` copy.
@@ -1006,5 +1333,309 @@ mod tests {
         let out_mild = ClassicThermal.evaluate(&mild_cold, &cfg_metric, &wb, &soil);
         assert_eq!(out_mild.day_counters.num_cumulative_days_dry_over_5c, 260);
         assert_eq!(out_mild.day_counters.num_cumulative_days_moist_over_5c, 100);
+    }
+
+    #[test]
+    fn strict_thermal_defect_2_unit_conversion() {
+        let wb = dry_water_balance();
+        let mut soil = SoilState::default();
+        for d in 0..360 {
+            soil.iday[d] = if d < 180 { 3 } else { 1 };
+        }
+        soil.nd = [180.0, 0.0, 180.0];
+
+        let metric_inp = base_input();
+        let metric_cfg = SiteConfig::default();
+
+        let mut imperial_inp = metric_inp;
+        for i in 0..12 {
+            imperial_inp.temp_c[i] = metric_inp.temp_c[i] * 9.0 / 5.0 + 32.0;
+            imperial_inp.precip_mm[i] = metric_inp.precip_mm[i] / 25.4;
+        }
+        let imperial_cfg = SiteConfig {
+            soil_air_offset: metric_cfg.soil_air_offset * 9.0 / 5.0,
+            is_metric: false,
+            ..metric_cfg
+        };
+
+        let out_metric = StrictThermal.evaluate(&metric_inp, &metric_cfg, &wb, &soil);
+        let out_imperial = StrictThermal.evaluate(&imperial_inp, &imperial_cfg, &wb, &soil);
+        assert_eq!(out_metric, out_imperial);
+    }
+
+    #[test]
+    fn strict_thermal_defect_3_pergelic_not_overwritten() {
+        let cfg = SiteConfig::default();
+        let wb = dry_water_balance();
+        let soil = uniform_soil(3);
+
+        // tma < 0 and st < 0 with dif*fcd >= 6 => Classic gives Frigid; Strict gives Pergelic.
+        let mut inp_frigid = base_input();
+        inp_frigid.temp_c = [
+            -20.0, -20.0, -15.0, -10.0, -8.0, -5.0, -5.0, -5.0, -10.0, -12.0, -15.0, -20.0,
+        ];
+        assert_eq!(
+            ClassicThermal
+                .evaluate(&inp_frigid, &cfg, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Frigid)
+        );
+        assert_eq!(
+            StrictThermal
+                .evaluate(&inp_frigid, &cfg, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Pergelic)
+        );
+
+        // tma < 0 and st < 0 with dif*fcd < 6 => Classic gives Isofrigid; Strict gives Pergelic.
+        let mut inp_iso = base_input();
+        inp_iso.temp_c = [-5.0; 12];
+        assert_eq!(
+            ClassicThermal
+                .evaluate(&inp_iso, &cfg, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Isofrigid)
+        );
+        assert_eq!(
+            StrictThermal
+                .evaluate(&inp_iso, &cfg, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Pergelic)
+        );
+
+        // tma < 0 and st >= cryic_ht (e.g. O-horizon + saturated => cryic_ht = 6.0, st = 6.5).
+        let cfg_o_sat = SiteConfig {
+            has_o_horizon: true,
+            is_saturated: true,
+            ..cfg
+        };
+        let mut inp_high_summer = base_input();
+        inp_high_summer.temp_c = [
+            -10.0, -10.0, -6.0, -4.0, -2.0, 4.0, 4.0, 4.0, -2.0, -4.0, -6.0, -10.0,
+        ];
+        assert_eq!(
+            ClassicThermal
+                .evaluate(&inp_high_summer, &cfg_o_sat, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Frigid)
+        );
+        assert_eq!(
+            StrictThermal
+                .evaluate(&inp_high_summer, &cfg_o_sat, &wb, &soil)
+                .temperature_regime,
+            Some(TemperatureRegime::Pergelic)
+        );
+    }
+
+    #[test]
+    fn strict_thermal_defect_4_attenuated_abs_dif_in_smr() {
+        let cfg = SiteConfig::default(); // amplitude = 0.66
+        let wb = dry_water_balance();
+
+        // Udic with 30 <= nd[0]+nd[1] < 90: st - wt = 6.0 (>= 5.0 unattenuated, 3.96 attenuated).
+        let mut soil_udic = SoilState::default();
+        for d in 0..360 {
+            soil_udic.iday[d] = if d < 50 { 1 } else { 3 };
+        }
+        soil_udic.nd = [50.0, 0.0, 310.0];
+
+        let mut inp = base_input();
+        inp.temp_c = [
+            10.0, 10.0, 13.0, 13.0, 13.0, 16.0, 16.0, 16.0, 13.0, 13.0, 13.0, 10.0,
+        ];
+        let classic_udic = ClassicThermal.evaluate(&inp, &cfg, &wb, &soil_udic);
+        let strict_udic = StrictThermal.evaluate(&inp, &cfg, &wb, &soil_udic);
+        assert_eq!(classic_udic.moisture_regime, MoistureRegime::Udic);
+        assert_eq!(
+            classic_udic.regime_subdivision2,
+            RegimeSubdivision2::Tempudic
+        );
+        assert_eq!(strict_udic.moisture_regime, MoistureRegime::Udic);
+        assert_eq!(
+            strict_udic.regime_subdivision2,
+            RegimeSubdivision2::Tropudic
+        );
+        assert_eq!(strict_udic.regime_subdivision1, RegimeSubdivision1::Dry);
+
+        // Defect #4 + .abs(): when wt > st (st - wt = -10.0, |st - wt| * 0.66 = 6.6 >= 5.0).
+        let mut inp_inverted = base_input();
+        inp_inverted.temp_c = [
+            22.0, 22.0, 17.0, 17.0, 17.0, 12.0, 12.0, 12.0, 17.0, 17.0, 17.0, 22.0,
+        ];
+        let classic_inv = ClassicThermal.evaluate(&inp_inverted, &cfg, &wb, &soil_udic);
+        let strict_inv = StrictThermal.evaluate(&inp_inverted, &cfg, &wb, &soil_udic);
+        assert_eq!(
+            classic_inv.regime_subdivision2,
+            RegimeSubdivision2::Tropudic
+        );
+        assert_eq!(strict_inv.regime_subdivision2, RegimeSubdivision2::Tempudic);
+    }
+
+    #[test]
+    fn strict_thermal_defect_5_cold_site_ncpm2_zero() {
+        let cfg = SiteConfig::default();
+        let wb = dry_water_balance();
+        let mut soil = SoilState::default();
+        for d in 0..360 {
+            soil.iday[d] = if d < 100 { 3 } else { 1 };
+        }
+        soil.nd = [260.0, 0.0, 100.0];
+
+        // All months < 8.0°C (np8 == 0): Classic sets ncpm2 = ncpm1 = 100; Strict keeps ncpm2 = 0.
+        let mut cold = base_input();
+        cold.temp_c = [
+            -5.0, -3.0, 0.0, 2.0, 4.0, 6.0, 7.0, 6.0, 4.0, 2.0, 0.0, -3.0,
+        ];
+        let classic_cold = ClassicThermal.evaluate(&cold, &cfg, &wb, &soil);
+        let strict_cold = StrictThermal.evaluate(&cold, &cfg, &wb, &soil);
+        assert_eq!(
+            classic_cold
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c,
+            100
+        );
+        assert_eq!(
+            strict_cold
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts,
+            100
+        );
+        assert_eq!(
+            strict_cold
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c,
+            0
+        );
+
+        // Warm site (all months >= 8.0°C): Strict still sets ncpm2 = ncpm1.
+        let mut warm = base_input();
+        warm.temp_c = [15.0; 12];
+        let strict_warm = StrictThermal.evaluate(&warm, &cfg, &wb, &soil);
+        assert_eq!(
+            strict_warm
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c,
+            100
+        );
+    }
+
+    #[test]
+    fn strict_thermal_defect_6_bimodal_nsd_all_intervals() {
+        let cfg = SiteConfig::default();
+        let wb = dry_water_balance();
+        let mut soil = SoilState::default();
+        // First 180 days moist (3), second 180 days dry (1).
+        for d in 0..360 {
+            soil.iday[d] = if d < 180 { 3 } else { 1 };
+        }
+        soil.nd = [180.0, 0.0, 180.0];
+
+        let mut bimodal = base_input();
+        bimodal.temp_c = [2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 8.0, 8.0, 2.0, 2.0, 2.0, 2.0];
+
+        let classic_bi = ClassicThermal.evaluate(&bimodal, &cfg, &wb, &soil);
+        let strict_bi = StrictThermal.evaluate(&bimodal, &cfg, &wb, &soil);
+
+        // Classic ignores the second >5°C interval (in dry summer days 181..360).
+        assert_eq!(classic_bi.day_counters.num_cumulative_days_dry_over_5c, 0);
+        // Strict counts both intervals (spring moist + summer dry).
+        assert!(strict_bi.day_counters.num_cumulative_days_dry_over_5c > 0);
+        assert_eq!(
+            strict_bi.day_counters.num_cumulative_days_moist_over_5c,
+            classic_bi.day_counters.num_cumulative_days_moist_over_5c
+        );
+        let strict_sum = strict_bi.day_counters.num_cumulative_days_dry_over_5c
+            + strict_bi.day_counters.num_cumulative_days_moist_over_5c;
+        assert!(strict_sum > classic_bi.day_counters.num_cumulative_days_moist_over_5c);
+    }
+
+    #[test]
+    fn strict_thermal_defect_9_nan_yields_undefined() {
+        let cfg = SiteConfig::default();
+        let wb = dry_water_balance();
+        let soil = uniform_soil(1);
+
+        // Single NaN in precip_mm on an otherwise wet site: Classic yields Perudic; Strict yields Undefined.
+        let mut nan_precip = base_input();
+        nan_precip.precip_mm = [200.0; 12];
+        nan_precip.precip_mm[6] = f64::NAN;
+        assert_eq!(
+            ClassicThermal
+                .evaluate(&nan_precip, &cfg, &wb, &soil)
+                .moisture_regime,
+            MoistureRegime::Perudic
+        );
+        let strict_p = StrictThermal.evaluate(&nan_precip, &cfg, &wb, &soil);
+        assert_eq!(strict_p.moisture_regime, MoistureRegime::Undefined);
+        assert_eq!(strict_p.regime_subdivision1, RegimeSubdivision1::Undefined);
+        assert_eq!(strict_p.regime_subdivision2, RegimeSubdivision2::Undefined);
+
+        // Single NaN in precip_mm on a dry site also yields Undefined in Strict.
+        let mut nan_precip_dry = base_input();
+        nan_precip_dry.precip_mm[6] = f64::NAN;
+        let strict_p_dry = StrictThermal.evaluate(&nan_precip_dry, &cfg, &wb, &soil);
+        assert_eq!(strict_p_dry.moisture_regime, MoistureRegime::Undefined);
+
+        // NaN in temp_c: Strict yields temperature_regime=None and MoistureRegime::Undefined.
+        let mut nan_temp = base_input();
+        nan_temp.temp_c[2] = f64::NAN;
+        let strict_t = StrictThermal.evaluate(&nan_temp, &cfg, &wb, &soil);
+        assert_eq!(strict_t.temperature_regime, None);
+        assert_eq!(strict_t.moisture_regime, MoistureRegime::Undefined);
+        assert_eq!(strict_t.regime_subdivision1, RegimeSubdivision1::Undefined);
+        assert_eq!(strict_t.regime_subdivision2, RegimeSubdivision2::Undefined);
+    }
+
+    #[test]
+    fn strict_thermal_defect_10_exact_5_and_8_plateaus() {
+        let cfg = SiteConfig {
+            soil_air_offset: 0.0,
+            ..SiteConfig::default()
+        };
+        let wb = dry_water_balance();
+        let soil = uniform_soil(3);
+
+        // [0, 5, 5, 0, ...]: never exceeds 5.0°C. Classic creates fake interval via 5.01; Strict yields 0.
+        let mut touch_5 = base_input();
+        touch_5.temp_c = [0.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let classic_touch = ClassicThermal.evaluate(&touch_5, &cfg, &wb, &soil);
+        let strict_touch = StrictThermal.evaluate(&touch_5, &cfg, &wb, &soil);
+        assert!(classic_touch.day_counters.num_cumulative_days_moist_over_5c > 0);
+        assert_eq!(
+            strict_touch.day_counters.num_cumulative_days_moist_over_5c,
+            0
+        );
+
+        // [0, 8, 8, 0, ...]: never exceeds 8.0°C. Classic sets ncpm2 > 0 via 8.01; Strict yields 0.
+        let mut touch_8 = base_input();
+        touch_8.temp_c = [0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let classic_touch8 = ClassicThermal.evaluate(&touch_8, &cfg, &wb, &soil);
+        let strict_touch8 = StrictThermal.evaluate(&touch_8, &cfg, &wb, &soil);
+        assert!(
+            classic_touch8
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c
+                > 0
+        );
+        assert_eq!(
+            strict_touch8
+                .day_counters
+                .num_consecutive_days_moist_in_some_parts_over_8c,
+            0
+        );
+
+        // True crossing across multi-month 5.0 / 8.0 plateaus without mutation.
+        let crossing = [0.0, 5.0, 5.0, 10.0, 10.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let (np, intervals) = find_threshold_intervals_strict(&crossing, 5.0, 36, 25);
+        assert_eq!(np, 1);
+        assert_eq!(intervals[0], (96, 175));
+
+        // Dip touching 5.0 from above without crossing < 5.0, plus one true < 5.0 winter dip.
+        let dip_touch = [
+            0.0, 10.0, 5.0, 5.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 0.0,
+        ];
+        let (np_dip, intervals_dip) = find_threshold_intervals_strict(&dip_touch, 5.0, 36, 25);
+        assert_eq!(np_dip, 1);
+        assert!(interval_len(intervals_dip[0].0, intervals_dip[0].1) > 250);
     }
 }
