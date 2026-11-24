@@ -1,14 +1,14 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-22
-Source State: STATE_2.md (Phase 4 implemented)
+Last Updated: 2026-11-23
+Source State: STATE_3.md (G18 strict-mode remediation completed)
 
 ## Circled Goal (Active)
 
-- **[G18]** Opt-in `StrictThornthwaiteForcing` / `strict_mode` remediates the 11 audited `jNSMR` defects (including SH PET `* 60.0` #1 and negative `latDD` #7 for Phase 4) while preserving `ClassicNewhall` parity.
-  - Why now: Now that Phase 4 throughput exceeds 10,000 sims/sec, remediating the remaining forcing defects improves Southern Hemisphere Phase 4 accuracy without sacrificing `jNSMR` parity.
-  - Exit criteria: `StrictThornthwaiteForcing` (and strict STR/SMR options) pass dedicated unit tests for all 11 defects while `golden_master.rs` remains 100% green.
-  - First action: Add `StrictThornthwaiteForcing` in `crates/newhall-core/src/forcing.rs` fixing Defects #1 and #7.
+- **[G7]** `r-pkg/R/` mirrors `jNSMR`'s user-facing API for `data.frame` and `terra::SpatRaster` inputs using chunked `readStart()`/`readValues()`/`writeValues()` and `terra::set.cats()`, supporting both `jNSMR`-parity default mode and opt-in `strict` / Phase 4 modes.
+  - Why now: Directly unblocks `G8` (`R CMD check`, end-to-end `jNSMR` parity tests, and raster speedup benchmark) and turns `r-pkg` into a usable drop-in replacement for `jNSMR`.
+  - Exit criteria: `data.frame` and `terra::SpatRaster` entry points accept `jNSMR`-compatible arguments, handle `NA` cells and multi-block chunked I/O, apply `terra::set.cats()`, and pass `devtools::test('r-pkg')` across classic, strict, and Phase 4 paths.
+  - First action: Inspect `jNSMR`'s user-facing R API signatures and categorical level tables in `planning/AUDIT_JNSM.md` and compare against `r-pkg/R/newhall.R`.
 
 ## Completed Goals
 
@@ -18,29 +18,23 @@ Source State: STATE_2.md (Phase 4 implemented)
 - **[G4]** `newhall-core` implements the baseline/custom Java NSM with zero inner-loop heap allocations; `cargo test` passes within `1e-9` on floats and 100% exact match on all categorical outputs across golden-master fixtures.
 - **[G9]** Phase 4 `Thermal1DModel` and `WaterTableHydrology` implemented with adversarial validation (`adversarial_phase4.rs`, 10k `proptest`) and `r-pkg` `extendr` bindings (`newhall_batch`, `newhall_batch_phase4`).
 - **[G11]** Pure-Rust Phase 4 micro-benchmark suite (`newhall-cli bench`) measures per-stage throughput (`ClassicNewhall`, `WaterTableHydrology`, `Thermal1DModel`, `Full Phase 4`).
+- **[G12]** Adversarial & parity regression gate (`adversarial_phase4.rs` + `golden_master.rs` + `strict_mode.rs`) guards all optimizations and physics changes.
 - **[G13]** Linear fast-path in `step_backward_euler` outside the freeze–thaw window (`|T - T_f| > 6 K`).
 - **[G14]** Precomputed per-site thermal material constants (`PrecomputedMaterial`) eliminate `powf()` calls inside the daily 16-node Newton–Picard loop.
 - **[G15]** Coarse-to-fine thermal spin-up equilibrates deep nodes in 36 monthly steps before 1–2 daily refinement years.
 - **[G17]** Phase 4 batch throughput reaches `10,161 sims/sec` (`> 10,000 sims/sec` target, `9.0x` speedup over `1,125 sims/sec` baseline).
+- **[G18]** Opt-in `StrictThornthwaiteForcing`, `StrictThermal`, `StrictHydrology`, and `StrictNewhall` remediate the applicable audited `jNSMR` defects (`#1`–`#10`) while preserving `ClassicNewhall` parity, with `strict`/`strict_forcing` exposed in `r-pkg` (`STATE_3.md`).
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G12]** Adversarial & parity regression gate (`adversarial_phase4.rs` + `golden_master.rs`) guards all optimizations.
-  - Depends on: G4, G9
-- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
-  - Depends on: G11, G12
-- **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
-  - Depends on: G2, G3, G4
-- **[G7]** `r-pkg/R/` mirrors `jNSMR`'s user-facing API for `data.frame` and `terra::SpatRaster` inputs using chunked `readStart()`/`readValues()`/`writeValues()` and `terra::set.cats()`.
-  - Depends on: G1, G9
 - **[G8]** `R CMD check` passes cleanly, `testthat` verifies parity with `jNSMR`, and a benchmark reports speedup over `jNSMR` on the sample raster dataset.
   - Depends on: G2, G4, G7
-- **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
-  - Depends on: G3, G9
 
 ## Independent Backlog
 
-- None.
+- **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
+- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
+- **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
 
 ## Deferred
 
