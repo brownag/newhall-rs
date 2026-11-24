@@ -71,25 +71,77 @@ impl ForcingModel for ThornthwaiteForcing {
     }
 }
 
+/// Defect-free Thornthwaite PET and daylength forcing model (fixes Defects #1, #2, #7, #9).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StrictThornthwaiteForcing;
+
+impl ForcingModel for StrictThornthwaiteForcing {
+    fn compute_water_balance(&self, input: &SiteInput, config: &SiteConfig) -> WaterBalance {
+        if input.lat_dd.is_nan()
+            || input.temp_c.iter().any(|t| t.is_nan())
+            || input.precip_mm.iter().any(|p| p.is_nan())
+        {
+            return WaterBalance {
+                mpe: [f64::NAN; 12],
+                annual_rainfall: f64::NAN,
+                annual_pet: f64::NAN,
+                annual_water_balance: f64::NAN,
+                summer_water_balance: f64::NAN,
+            };
+        }
+
+        let (temp_c, precip_mm) = if config.is_metric {
+            (input.temp_c, input.precip_mm)
+        } else {
+            let mut t_c = [0.0_f64; 12];
+            let mut p_mm = [0.0_f64; 12];
+            for i in 0..12 {
+                t_c[i] = (input.temp_c[i] - 32.0) * 5.0 / 9.0;
+                p_mm[i] = input.precip_mm[i] * 25.4;
+            }
+            (t_c, p_mm)
+        };
+
+        compute_with_hemisphere_mode(&temp_c, &precip_mm, input.lat_dd, input.hemisphere(), true)
+    }
+}
+
 /// Computes Thornthwaite PET and seasonal/annual water balances for an explicit hemisphere.
 fn compute_with_hemisphere(input: &SiteInput, hemisphere: Hemisphere) -> WaterBalance {
-    let upe = compute_unadjusted_pet(&input.temp_c);
-    let mpe = apply_daylength_correction(&upe, input.lat_dd, hemisphere);
+    compute_with_hemisphere_mode(
+        &input.temp_c,
+        &input.precip_mm,
+        input.lat_dd,
+        hemisphere,
+        false,
+    )
+}
+
+/// Shared Thornthwaite PET and water-balance kernel parameterized by `strict` defect-fix mode.
+fn compute_with_hemisphere_mode(
+    temp_c: &[f64; 12],
+    precip_mm: &[f64; 12],
+    lat_dd: f64,
+    hemisphere: Hemisphere,
+    strict: bool,
+) -> WaterBalance {
+    let upe = compute_unadjusted_pet(temp_c);
+    let mpe = apply_daylength_correction(&upe, lat_dd, hemisphere, strict);
 
     let mut annual_rainfall = 0.0_f64;
     let mut annual_pet = 0.0_f64;
-    for (p, e) in input.precip_mm.iter().zip(mpe.iter()) {
+    for (p, e) in precip_mm.iter().zip(mpe.iter()) {
         annual_rainfall += p;
         annual_pet += e;
     }
 
     let mut annual_water_balance = 0.0_f64;
-    for (p, e) in input.precip_mm.iter().zip(mpe.iter()) {
+    for (p, e) in precip_mm.iter().zip(mpe.iter()) {
         annual_water_balance += p;
         annual_water_balance -= e;
     }
 
-    let summer_water_balance = compute_summer_water_balance(&input.precip_mm, &mpe, hemisphere);
+    let summer_water_balance = compute_summer_water_balance(precip_mm, &mpe, hemisphere);
 
     WaterBalance {
         mpe,
@@ -140,7 +192,12 @@ fn compute_unadjusted_pet(temp_c: &[f64; 12]) -> [f64; 12] {
 }
 
 /// Applies NH (`INZ`/`RN`) or SH (`FS`/`RS`) latitude daylength correction to `upe`.
-fn apply_daylength_correction(upe: &[f64; 12], lat_dd: f64, hemisphere: Hemisphere) -> [f64; 12] {
+fn apply_daylength_correction(
+    upe: &[f64; 12],
+    lat_dd: f64,
+    hemisphere: Hemisphere,
+    strict: bool,
+) -> [f64; 12] {
     let mut mpe = [0.0_f64; 12];
 
     match hemisphere {
@@ -163,16 +220,17 @@ fn apply_daylength_correction(upe: &[f64; 12], lat_dd: f64, hemisphere: Hemisphe
             }
         }
         Hemisphere::South => {
+            let lat = if strict { lat_dd.abs() } else { lat_dd };
             let mut nrow = 0_usize;
             for &r in &RS {
-                if lat_dd >= r {
+                if lat >= r {
                     nrow += 1;
                 } else {
                     break;
                 }
             }
 
-            let lat_int_i32 = lat_dd as i32;
+            let lat_int_i32 = lat as i32;
             let lat_int = lat_int_i32 as f64;
 
             if nrow != 0 {
@@ -180,11 +238,18 @@ fn apply_daylength_correction(upe: &[f64; 12], lat_dd: f64, hemisphere: Hemisphe
                     if upe[i] > 0.0 {
                         if nrow >= 13 || FS[i][nrow - 1] == FS[i][nrow] {
                             mpe[i] = upe[i] * FS[i][nrow - 1];
+                        } else if strict {
+                            // Defect #1 fixed: parenthesize `(RS[nrow] - RS[nrow - 1]) * 60.0`.
+                            let mut cf = (FS[i][nrow] - FS[i][nrow - 1])
+                                * ((lat_int - RS[nrow - 1]) * 60.0 + ((lat - lat_int) * 60.0))
+                                / ((RS[nrow] - RS[nrow - 1]) * 60.0);
+                            cf += FS[i][nrow - 1];
+                            mpe[i] = upe[i] * cf;
                         } else {
                             // Defect #1: missing parentheses around `(RS[nrow] - RS[nrow - 1]) * 60.0`
                             // replicates Java's left-to-right `/` then `* 60.0` precedence verbatim.
                             let mut cf = (FS[i][nrow] - FS[i][nrow - 1])
-                                * ((lat_int - RS[nrow - 1]) * 60.0 + ((lat_dd - lat_int) * 60.0))
+                                * ((lat_int - RS[nrow - 1]) * 60.0 + ((lat - lat_int) * 60.0))
                                 / (RS[nrow] - RS[nrow - 1])
                                 * 60.0;
                             cf += FS[i][nrow - 1];
@@ -193,9 +258,8 @@ fn apply_daylength_correction(upe: &[f64; 12], lat_dd: f64, hemisphere: Hemisphe
                     }
                 }
             } else {
-                // Defect #7: signed `lat_dd` (when `< 0.0`) enters the 0..5 deg SH formula directly.
-                let lat_minutes =
-                    (lat_int_i32.wrapping_mul(60) as f64) + ((lat_dd - lat_int) * 60.0);
+                // Defect #7: in non-strict mode, signed `lat_dd` (when `< 0.0`) enters the 0..5 deg SH formula directly.
+                let lat_minutes = (lat_int_i32.wrapping_mul(60) as f64) + ((lat - lat_int) * 60.0);
                 for i in 0..12 {
                     if upe[i] > 0.0 {
                         let mut cf = (FS[i][0] - INZ[i][0]) * lat_minutes / 300.0;
@@ -431,5 +495,150 @@ mod tests {
         assert_eq!(wb_metric.mpe[1], 0.0);
         assert_eq!(wb_metric.mpe[11], 0.0);
         assert!(wb_metric.mpe[6] > 0.0);
+    }
+
+    #[test]
+    fn strict_thornthwaite_forcing_is_copy_and_default() {
+        fn assert_copy_default<T: Copy + Default>() {}
+        assert_copy_default::<StrictThornthwaiteForcing>();
+    }
+
+    #[test]
+    fn strict_forcing_fixes_sh_interpolation_and_negative_lat() {
+        let temps = [20.0; 12];
+        let precip = [80.0; 12];
+        let upe = compute_unadjusted_pet(&temps);
+        let strict = StrictThornthwaiteForcing;
+        let cfg = SiteConfig::default();
+
+        // Defect #7 + #1: -12.5 deg S uses |lat_dd| = 12.5 and proper denominator parens.
+        let site_neg_12_5 = sample_site(-12.5, temps, precip);
+        let wb_strict = strict.compute_water_balance(&site_neg_12_5, &cfg);
+        let wb_strict_pos_sh =
+            compute_with_hemisphere_mode(&temps, &precip, 12.5, Hemisphere::South, true);
+        assert_eq!(wb_strict, wb_strict_pos_sh);
+
+        for i in 0..12 {
+            let cf = (FS[i][2] - FS[i][1]) * 150.0 / 300.0 + FS[i][1];
+            assert!(wb_strict.mpe[i] > 0.0);
+            assert_close(wb_strict.mpe[i], upe[i] * cf);
+        }
+
+        // Verify classic ThornthwaiteForcing still hits Defect #7 at -12.5 deg S.
+        let wb_classic = ThornthwaiteForcing.compute_water_balance(&site_neg_12_5, &cfg);
+        assert_ne!(wb_classic.mpe[0], wb_strict.mpe[0]);
+
+        // Defect #7 for 0 < |lat| < 5 (-2.5 deg S matches +2.5 deg S SH interpolation).
+        let site_neg_2_5 = sample_site(-2.5, temps, precip);
+        let wb_neg_2_5 = strict.compute_water_balance(&site_neg_2_5, &cfg);
+        let wb_pos_2_5 =
+            compute_with_hemisphere(&sample_site(2.5, temps, precip), Hemisphere::South);
+        assert_eq!(wb_neg_2_5, wb_pos_2_5);
+
+        // Defect #1 monotonicity across SH latitudes (Jan FS[0] strictly increases with |lat|).
+        let lats = [-5.0, -7.5, -10.0, -12.5, -15.0, -22.5, -35.0, -50.0];
+        let mut prev_jan = 0.0_f64;
+        for &lat in &lats {
+            let wb = strict.compute_water_balance(&sample_site(lat, temps, precip), &cfg);
+            assert!(
+                wb.mpe[0] > prev_jan,
+                "expected Jan PET at {lat} ({}) > {prev_jan}",
+                wb.mpe[0]
+            );
+            prev_jan = wb.mpe[0];
+        }
+
+        // >= 50 deg S clamps to 50.0 deg S.
+        let wb_60 = strict.compute_water_balance(&sample_site(-60.0, temps, precip), &cfg);
+        let wb_50 = strict.compute_water_balance(&sample_site(-50.0, temps, precip), &cfg);
+        assert_eq!(wb_60, wb_50);
+    }
+
+    #[test]
+    fn strict_forcing_converts_imperial_units() {
+        let temps_c = [
+            -2.0, 1.0, 6.0, 12.0, 17.5, 22.0, 25.0, 24.0, 19.0, 12.5, 5.5, 0.0,
+        ];
+        let precip_mm = [
+            45.0, 40.0, 55.0, 70.0, 90.0, 110.0, 105.0, 95.0, 80.0, 65.0, 50.0, 48.0,
+        ];
+        let mut temps_f = [0.0; 12];
+        let mut precip_in = [0.0; 12];
+        for i in 0..12 {
+            temps_f[i] = temps_c[i] * 9.0 / 5.0 + 32.0;
+            precip_in[i] = precip_mm[i] / 25.4;
+        }
+
+        let strict = StrictThornthwaiteForcing;
+        let wb_metric = strict.compute_water_balance(
+            &sample_site(-33.5, temps_c, precip_mm),
+            &SiteConfig {
+                is_metric: true,
+                ..SiteConfig::default()
+            },
+        );
+        let wb_imperial = strict.compute_water_balance(
+            &sample_site(-33.5, temps_f, precip_in),
+            &SiteConfig {
+                is_metric: false,
+                ..SiteConfig::default()
+            },
+        );
+
+        for i in 0..12 {
+            assert_close(wb_imperial.mpe[i], wb_metric.mpe[i]);
+        }
+        assert_close(wb_imperial.annual_rainfall, wb_metric.annual_rainfall);
+        assert_close(wb_imperial.annual_pet, wb_metric.annual_pet);
+        assert_close(
+            wb_imperial.annual_water_balance,
+            wb_metric.annual_water_balance,
+        );
+        assert_close(
+            wb_imperial.summer_water_balance,
+            wb_metric.summer_water_balance,
+        );
+    }
+
+    #[test]
+    fn strict_forcing_propagates_nan_cleanly() {
+        let strict = StrictThornthwaiteForcing;
+        let base_t = [15.0; 12];
+        let base_p = [60.0; 12];
+
+        let mut nan_t = base_t;
+        nan_t[4] = f64::NAN;
+        let wb_t =
+            strict.compute_water_balance(&sample_site(35.0, nan_t, base_p), &SiteConfig::default());
+        assert!(wb_t.mpe.iter().all(|v| v.is_nan()));
+        assert!(wb_t.annual_rainfall.is_nan());
+        assert!(wb_t.annual_pet.is_nan());
+        assert!(wb_t.annual_water_balance.is_nan());
+        assert!(wb_t.summer_water_balance.is_nan());
+
+        let mut nan_p = base_p;
+        nan_p[7] = f64::NAN;
+        let wb_p = strict.compute_water_balance(
+            &sample_site(-20.0, base_t, nan_p),
+            &SiteConfig {
+                is_metric: false,
+                ..SiteConfig::default()
+            },
+        );
+        assert!(wb_p.mpe.iter().all(|v| v.is_nan()));
+        assert!(wb_p.annual_rainfall.is_nan());
+        assert!(wb_p.annual_pet.is_nan());
+        assert!(wb_p.annual_water_balance.is_nan());
+        assert!(wb_p.summer_water_balance.is_nan());
+
+        let wb_lat = strict.compute_water_balance(
+            &sample_site(f64::NAN, base_t, base_p),
+            &SiteConfig::default(),
+        );
+        assert!(wb_lat.mpe.iter().all(|v| v.is_nan()));
+        assert!(wb_lat.annual_rainfall.is_nan());
+        assert!(wb_lat.annual_pet.is_nan());
+        assert!(wb_lat.annual_water_balance.is_nan());
+        assert!(wb_lat.summer_water_balance.is_nan());
     }
 }
