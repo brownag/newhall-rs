@@ -2,9 +2,15 @@
 % Please edit documentation in R/newhall.R
 \name{newhall_batch}
 \alias{newhall_batch}
+\alias{newhall_batch_raw}
+\alias{newhall_batch.default}
+\alias{newhall_batch.data.frame}
+\alias{newhall_batch.character}
 \title{Run Classic Newhall Simulation in Batch}
 \usage{
-newhall_batch(
+newhall_batch(.data, ...)
+
+newhall_batch_raw(
   lat,
   lon,
   temp,
@@ -18,8 +24,28 @@ newhall_batch(
   is_metric = TRUE,
   strict = FALSE
 )
+
+\method{newhall_batch}{default}(.data = NULL, ...)
+
+\method{newhall_batch}{data.frame}(
+  .data,
+  unitSystem = "metric",
+  soilAirOffset = ifelse(tolower(unitSystem) \%in\% c("in", "english"), 4.5, 2.5),
+  amplitude = 0.66,
+  hasOHorizon = FALSE,
+  isSaturated = FALSE,
+  strict = FALSE,
+  ...
+)
+
+\method{newhall_batch}{character}(.data, ...)
 }
 \arguments{
+\item{.data}{Input object (\code{data.frame}, \code{character} path(s) to CSV files,
+or omitted/\code{NULL}/latitude vector for the default vector/matrix interface).}
+
+\item{...}{Arguments passed to S3 methods.}
+
 \item{lat}{Numeric vector of latitudes (decimal degrees).}
 
 \item{lon}{Numeric vector of longitudes (decimal degrees).}
@@ -32,21 +58,40 @@ newhall_batch(
 
 \item{elev}{Numeric vector of elevations (m).}
 
-\item{soil_air_offset}{Soil-air temperature offset (C; default \code{2.5}).}
+\item{soil_air_offset}{Numeric scalar or length-\code{n} vector of soil-air
+temperature offsets (C; default \code{2.5}).}
 
-\item{amplitude}{Soil-to-air amplitude ratio (default \code{0.66}).}
+\item{amplitude}{Numeric scalar or length-\code{n} vector of soil-to-air
+amplitude ratios (default \code{0.66}).}
 
-\item{has_o_horizon}{Logical; presence of O-horizon.}
+\item{has_o_horizon}{Logical scalar or length-\code{n} vector; presence of O-horizon.}
 
-\item{is_saturated}{Logical; saturation at 50 cm.}
+\item{is_saturated}{Logical scalar or length-\code{n} vector; saturation at 50 cm.}
 
 \item{is_metric}{Logical; stored for \code{jNSMR} parity (converted when \code{strict = TRUE}).}
 
-\item{strict}{Logical; use defect-remediated \code{StrictNewhall} physics instead of \code{ClassicNewhall} (default \code{FALSE}).}
+\item{strict}{Logical; use defect-remediated \code{StrictNewhall} physics instead of
+\code{ClassicNewhall} (default \code{FALSE}).}
+
+\item{unitSystem}{Character unit system (\code{"metric"}, \code{"mm"}, \code{"cm"}, \code{"in"},
+or \code{"english"}).}
+
+\item{soilAirOffset}{Default soil-air temperature offset used when \code{.data}
+lacks a \code{soilAirOffset} column (\code{4.5} F for English units, \code{2.5} C for metric).}
+
+\item{hasOHorizon}{Default logical O-horizon flag used when \code{.data} lacks a
+\code{hasOHorizon} column.}
+
+\item{isSaturated}{Default logical saturation flag used when \code{.data} lacks an
+\code{isSaturated} column.}
 }
 \value{
-A \code{data.frame} of Newhall simulation outputs.
+A \code{data.frame} of Newhall simulation outputs (\code{newhall_batch_raw()} and
+\code{newhall_batch.default()} return 0-indexed integer regime codes; \code{data.frame}
+and \code{character} methods return decoded character regime names).
 }
 \description{
-Run Classic Newhall Simulation in Batch
+Generic batch entry point supporting vector/matrix inputs (\code{default}),
+\code{data.frame} inputs with \code{jNSMR}-compatible column schemas, and CSV file
+path(s) (\code{character}).
 }

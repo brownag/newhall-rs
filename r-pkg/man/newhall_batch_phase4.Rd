@@ -2,9 +2,14 @@
 % Please edit documentation in R/newhall.R
 \name{newhall_batch_phase4}
 \alias{newhall_batch_phase4}
+\alias{newhall_batch_phase4_raw}
+\alias{newhall_batch_phase4.default}
+\alias{newhall_batch_phase4.data.frame}
 \title{Run Phase 4 Newhall Simulation with 1D Thermal and Water-Table Physics}
 \usage{
-newhall_batch_phase4(
+newhall_batch_phase4(.data, ...)
+
+newhall_batch_phase4_raw(
   lat,
   lon,
   temp,
@@ -31,8 +36,38 @@ newhall_batch_phase4(
   is_saturated = FALSE,
   strict_forcing = TRUE
 )
+
+\method{newhall_batch_phase4}{default}(.data = NULL, ...)
+
+\method{newhall_batch_phase4}{data.frame}(
+  .data,
+  soilAirOffset = 2.5,
+  amplitude = 0.66,
+  hasOHorizon = FALSE,
+  isSaturated = FALSE,
+  oHorizonThickness = 0,
+  bulkDensity = 1400,
+  quartzFraction = 0.4,
+  porosity = 0.45,
+  zWt = 100,
+  use_thermal_1d = TRUE,
+  use_water_table = TRUE,
+  use_prognostic_wt = FALSE,
+  k_sat = 100,
+  z_prof = 1,
+  sy = 0.2,
+  k_lat = 0.02,
+  texture = "medium",
+  strict_forcing = TRUE,
+  ...
+)
 }
 \arguments{
+\item{.data}{Input \code{data.frame}, or omitted/\code{NULL}/latitude vector for the
+default vector/matrix interface.}
+
+\item{...}{Arguments passed to S3 methods.}
+
 \item{lat}{Numeric vector of latitudes (decimal degrees).}
 
 \item{lon}{Numeric vector of longitudes (decimal degrees).}
@@ -53,7 +88,7 @@ newhall_batch_phase4(
 
 \item{quartz_fraction}{Numeric vector of quartz volume fraction \verb{[0, 1]}.}
 
-\item{porosity}{Numeric vector of soil porosity \verb{[0, 1]}.}
+\item{porosity}{Default soil porosity used when \code{.data} lacks a \code{porosity} column.}
 
 \item{z_wt}{Numeric vector of water-table depth (m) or \code{z_imp} in prognostic mode.}
 
@@ -73,19 +108,47 @@ newhall_batch_phase4(
 
 \item{texture}{Soil texture class (\code{"coarse"}, \code{"medium"}, \code{"fine"}, \code{"organic"}).}
 
-\item{soil_air_offset}{Fallback classic soil-air offset (C).}
+\item{soil_air_offset}{Numeric scalar or length-\code{n} vector of fallback classic
+soil-air offsets (C).}
 
-\item{amplitude}{Fallback classic amplitude ratio.}
+\item{amplitude}{Numeric scalar or length-\code{n} vector of fallback classic
+amplitude ratios.}
 
-\item{has_o_horizon}{Logical; presence of O-horizon.}
+\item{has_o_horizon}{Logical scalar or length-\code{n} vector; presence of O-horizon.}
 
-\item{is_saturated}{Logical; saturation at 50 cm.}
+\item{is_saturated}{Logical scalar or length-\code{n} vector; saturation at 50 cm.}
 
-\item{strict_forcing}{Logical; use defect-remediated \code{StrictThornthwaiteForcing} instead of \code{ThornthwaiteForcing} (default \code{TRUE}).}
+\item{strict_forcing}{Logical; use defect-remediated \code{StrictThornthwaiteForcing}
+instead of \code{ThornthwaiteForcing} (default \code{TRUE}).}
+
+\item{soilAirOffset}{Default soil-air temperature offset (C) used when \code{.data}
+lacks a \code{soilAirOffset} column.}
+
+\item{hasOHorizon}{Default logical O-horizon flag used when \code{.data} lacks a
+\code{hasOHorizon} column.}
+
+\item{isSaturated}{Default logical saturation flag used when \code{.data} lacks an
+\code{isSaturated} column.}
+
+\item{oHorizonThickness}{Default O-horizon thickness (m) used when \code{.data}
+lacks an \code{oHorizonThickness} column.}
+
+\item{bulkDensity}{Default dry bulk density (kg/m^3) used when \code{.data} lacks a
+\code{bulkDensity} column.}
+
+\item{quartzFraction}{Default quartz volume fraction used when \code{.data} lacks a
+\code{quartzFraction} column.}
+
+\item{zWt}{Default water-table depth (m) used when \code{.data} lacks a \code{zWt} column.}
 }
 \value{
-A \code{data.frame} of Newhall simulation outputs including \code{satDaysMcs} and \code{aquicBioDays}.
+A \code{data.frame} of Newhall simulation outputs including \code{satDaysMcs} and
+\code{aquicBioDays} (\code{newhall_batch_phase4_raw()} and \code{newhall_batch_phase4.default()}
+return integer regime codes; \code{newhall_batch_phase4.data.frame()} returns
+decoded character regime names).
 }
 \description{
-Run Phase 4 Newhall Simulation with 1D Thermal and Water-Table Physics
+Generic Phase 4 batch entry point supporting vector/matrix inputs (\code{default})
+and \code{data.frame} inputs (with optional \code{oHorizonThickness}, \code{bulkDensity},
+\code{quartzFraction}, \code{porosity}, \code{zWt}, and \code{snowJan}..\code{snowDec} columns).
 }
