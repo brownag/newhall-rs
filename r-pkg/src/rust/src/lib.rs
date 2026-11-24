@@ -1,7 +1,8 @@
 use extendr_api::prelude::*;
 use newhall_core::{
-    ClassicHydrology, ClassicNewhall, ClassicThermal, SimEngine, SiteConfig, SiteInput, SiteOutput,
-    SoaBatchInput, SoilTextureClass, Thermal1DConfig, Thermal1DModel, ThornthwaiteForcing,
+    ClassicHydrology, ClassicNewhall, ClassicThermal, ForcingModel, SimEngine, SiteConfig,
+    SiteInput, SiteOutput, SoaBatchInput, SoilTextureClass, StrictNewhall,
+    StrictThornthwaiteForcing, Thermal1DConfig, Thermal1DModel, ThornthwaiteForcing,
     WaterTableConfig, WaterTableHydrology, WaterTableMode,
 };
 use rayon::prelude::*;
@@ -114,7 +115,7 @@ fn parse_texture(s: &str) -> SoilTextureClass {
     }
 }
 
-/// Classic `jNSMR`-compatible vectorized batch runner using SoA `&[f64]` slices and `rayon`.
+/// Classic or strict Newhall vectorized batch runner using SoA `&[f64]` slices and `rayon`.
 #[extendr]
 #[allow(clippy::too_many_arguments)]
 fn newhall_batch_rust(
@@ -129,6 +130,7 @@ fn newhall_batch_rust(
     has_o_horizon: bool,
     is_saturated: bool,
     is_metric: bool,
+    strict: bool,
 ) -> Result<List> {
     let n = lat.len();
     if lon.len() != n
@@ -157,8 +159,37 @@ fn newhall_batch_rust(
         is_saturated,
         is_metric,
     };
-    let outputs = ClassicNewhall::default().run_batch_soa(&batch, &cfg);
+    let outputs = if strict {
+        StrictNewhall::default().run_batch_soa(&batch, &cfg)
+    } else {
+        ClassicNewhall::default().run_batch_soa(&batch, &cfg)
+    };
     Ok(outputs_to_r_list(&outputs, false))
+}
+
+fn run_phase4_with_forcing<F: ForcingModel>(
+    forcing: F,
+    use_thermal_1d: bool,
+    use_water_table: bool,
+    t_cfg: Thermal1DConfig,
+    wt_cfg: WaterTableConfig,
+    input: &SiteInput,
+    cfg: &SiteConfig,
+) -> SiteOutput {
+    match (use_thermal_1d, use_water_table) {
+        (true, true) => SimEngine::new(
+            Thermal1DModel::new(t_cfg),
+            forcing,
+            WaterTableHydrology::new(wt_cfg),
+        )
+        .run(input, cfg),
+        (true, false) => {
+            SimEngine::new(Thermal1DModel::new(t_cfg), forcing, ClassicHydrology).run(input, cfg)
+        }
+        (false, true) => SimEngine::new(ClassicThermal, forcing, WaterTableHydrology::new(wt_cfg))
+            .run(input, cfg),
+        (false, false) => SimEngine::new(ClassicThermal, forcing, ClassicHydrology).run(input, cfg),
+    }
 }
 
 /// Phase 4 vectorized batch runner supporting `Thermal1DModel` and `WaterTableHydrology`.
@@ -189,6 +220,7 @@ fn newhall_batch_phase4_rust(
     amplitude: f64,
     has_o_horizon: bool,
     is_saturated: bool,
+    strict_forcing: bool,
 ) -> Result<List> {
     let n = lat.len();
     if lon.len() != n
@@ -254,26 +286,26 @@ fn newhall_batch_phase4_rust(
                 enable_capillary: true,
             };
 
-            match (use_thermal_1d, use_water_table) {
-                (true, true) => SimEngine::new(
-                    Thermal1DModel::new(t_cfg),
-                    ThornthwaiteForcing,
-                    WaterTableHydrology::new(wt_cfg),
+            if strict_forcing {
+                run_phase4_with_forcing(
+                    StrictThornthwaiteForcing,
+                    use_thermal_1d,
+                    use_water_table,
+                    t_cfg,
+                    wt_cfg,
+                    &input,
+                    &cfg,
                 )
-                .run(&input, &cfg),
-                (true, false) => SimEngine::new(
-                    Thermal1DModel::new(t_cfg),
+            } else {
+                run_phase4_with_forcing(
                     ThornthwaiteForcing,
-                    ClassicHydrology,
+                    use_thermal_1d,
+                    use_water_table,
+                    t_cfg,
+                    wt_cfg,
+                    &input,
+                    &cfg,
                 )
-                .run(&input, &cfg),
-                (false, true) => SimEngine::new(
-                    ClassicThermal,
-                    ThornthwaiteForcing,
-                    WaterTableHydrology::new(wt_cfg),
-                )
-                .run(&input, &cfg),
-                (false, false) => ClassicNewhall::default().run(&input, &cfg),
             }
         })
         .collect();

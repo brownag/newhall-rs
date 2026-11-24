@@ -6,12 +6,12 @@
 #' @useDynLib newhallrs, .registration = TRUE
 NULL
 
-newhall_batch_rust <- function(lat, lon, temp_flat, precip_flat, awc, elev, soil_air_offset, amplitude, has_o_horizon, is_saturated, is_metric) {
-  .Call(wrap__newhall_batch_rust, lat, lon, temp_flat, precip_flat, awc, elev, soil_air_offset, amplitude, has_o_horizon, is_saturated, is_metric)
+newhall_batch_rust <- function(lat, lon, temp_flat, precip_flat, awc, elev, soil_air_offset, amplitude, has_o_horizon, is_saturated, is_metric, strict) {
+  .Call(wrap__newhall_batch_rust, lat, lon, temp_flat, precip_flat, awc, elev, soil_air_offset, amplitude, has_o_horizon, is_saturated, is_metric, strict)
 }
 
-newhall_batch_phase4_rust <- function(lat, lon, temp_flat, precip_flat, awc, elev, snow_flat, o_thickness, bulk_density, quartz_frac, porosity, z_wt, use_thermal_1d, use_water_table, use_prognostic_wt, k_sat, z_prof, sy, k_lat, texture, soil_air_offset, amplitude, has_o_horizon, is_saturated) {
-  .Call(wrap__newhall_batch_phase4_rust, lat, lon, temp_flat, precip_flat, awc, elev, snow_flat, o_thickness, bulk_density, quartz_frac, porosity, z_wt, use_thermal_1d, use_water_table, use_prognostic_wt, k_sat, z_prof, sy, k_lat, texture, soil_air_offset, amplitude, has_o_horizon, is_saturated)
+newhall_batch_phase4_rust <- function(lat, lon, temp_flat, precip_flat, awc, elev, snow_flat, o_thickness, bulk_density, quartz_frac, porosity, z_wt, use_thermal_1d, use_water_table, use_prognostic_wt, k_sat, z_prof, sy, k_lat, texture, soil_air_offset, amplitude, has_o_horizon, is_saturated, strict_forcing) {
+  .Call(wrap__newhall_batch_phase4_rust, lat, lon, temp_flat, precip_flat, awc, elev, snow_flat, o_thickness, bulk_density, quartz_frac, porosity, z_wt, use_thermal_1d, use_water_table, use_prognostic_wt, k_sat, z_prof, sy, k_lat, texture, soil_air_offset, amplitude, has_o_horizon, is_saturated, strict_forcing)
 }
 
 # nolint end

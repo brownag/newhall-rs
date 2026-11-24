@@ -15,7 +15,8 @@ newhall_batch(
   amplitude = 0.66,
   has_o_horizon = FALSE,
   is_saturated = FALSE,
-  is_metric = TRUE
+  is_metric = TRUE,
+  strict = FALSE
 )
 }
 \arguments{
@@ -39,7 +40,9 @@ newhall_batch(
 
 \item{is_saturated}{Logical; saturation at 50 cm.}
 
-\item{is_metric}{Logical; stored for \code{jNSMR} parity.}
+\item{is_metric}{Logical; stored for \code{jNSMR} parity (converted when \code{strict = TRUE}).}
+
+\item{strict}{Logical; use defect-remediated \code{StrictNewhall} physics instead of \code{ClassicNewhall} (default \code{FALSE}).}
 }
 \value{
 A \code{data.frame} of Newhall simulation outputs.

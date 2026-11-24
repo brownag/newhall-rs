@@ -10,7 +10,8 @@
 #' @param amplitude Soil-to-air amplitude ratio (default `0.66`).
 #' @param has_o_horizon Logical; presence of O-horizon.
 #' @param is_saturated Logical; saturation at 50 cm.
-#' @param is_metric Logical; stored for `jNSMR` parity.
+#' @param is_metric Logical; stored for `jNSMR` parity (converted when `strict = TRUE`).
+#' @param strict Logical; use defect-remediated `StrictNewhall` physics instead of `ClassicNewhall` (default `FALSE`).
 #' @useDynLib newhallrs, .registration = TRUE
 #' @return A `data.frame` of Newhall simulation outputs.
 #' @export
@@ -25,7 +26,8 @@ newhall_batch <- function(
     amplitude = 0.66,
     has_o_horizon = FALSE,
     is_saturated = FALSE,
-    is_metric = TRUE
+    is_metric = TRUE,
+    strict = FALSE
 ) {
   temp_mat <- as.matrix(temp)
   precip_mat <- as.matrix(precip)
@@ -40,7 +42,8 @@ newhall_batch <- function(
     as.double(amplitude),
     isTRUE(has_o_horizon),
     isTRUE(is_saturated),
-    isTRUE(is_metric)
+    isTRUE(is_metric),
+    isTRUE(strict)
   )
   as.data.frame(res, stringsAsFactors = FALSE)
 }
@@ -71,6 +74,7 @@ newhall_batch <- function(
 #' @param amplitude Fallback classic amplitude ratio.
 #' @param has_o_horizon Logical; presence of O-horizon.
 #' @param is_saturated Logical; saturation at 50 cm.
+#' @param strict_forcing Logical; use defect-remediated `StrictThornthwaiteForcing` instead of `ThornthwaiteForcing` (default `TRUE`).
 #' @return A `data.frame` of Newhall simulation outputs including `satDaysMcs` and `aquicBioDays`.
 #' @export
 newhall_batch_phase4 <- function(
@@ -97,7 +101,8 @@ newhall_batch_phase4 <- function(
     soil_air_offset = 2.5,
     amplitude = 0.66,
     has_o_horizon = FALSE,
-    is_saturated = FALSE
+    is_saturated = FALSE,
+    strict_forcing = TRUE
 ) {
   temp_mat <- as.matrix(temp)
   precip_mat <- as.matrix(precip)
@@ -126,7 +131,8 @@ newhall_batch_phase4 <- function(
     as.double(soil_air_offset),
     as.double(amplitude),
     isTRUE(has_o_horizon),
-    isTRUE(is_saturated)
+    isTRUE(is_saturated),
+    isTRUE(strict_forcing)
   )
   as.data.frame(res, stringsAsFactors = FALSE)
 }

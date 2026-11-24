@@ -28,7 +28,8 @@ newhall_batch_phase4(
   soil_air_offset = 2.5,
   amplitude = 0.66,
   has_o_horizon = FALSE,
-  is_saturated = FALSE
+  is_saturated = FALSE,
+  strict_forcing = TRUE
 )
 }
 \arguments{
@@ -79,6 +80,8 @@ newhall_batch_phase4(
 \item{has_o_horizon}{Logical; presence of O-horizon.}
 
 \item{is_saturated}{Logical; saturation at 50 cm.}
+
+\item{strict_forcing}{Logical; use defect-remediated \code{StrictThornthwaiteForcing} instead of \code{ThornthwaiteForcing} (default \code{TRUE}).}
 }
 \value{
 A \code{data.frame} of Newhall simulation outputs including \code{satDaysMcs} and \code{aquicBioDays}.
