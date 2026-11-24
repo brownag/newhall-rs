@@ -1,8 +1,8 @@
 use extendr_api::prelude::*;
 use newhall_core::{
-    ClassicHydrology, ClassicNewhall, ClassicThermal, ForcingModel, SimEngine, SiteConfig,
-    SiteInput, SiteOutput, SoaBatchInput, SoilTextureClass, StrictNewhall,
-    StrictThornthwaiteForcing, Thermal1DConfig, Thermal1DModel, ThornthwaiteForcing,
+    ClassicHydrology, ClassicNewhall, ClassicThermal, ForcingModel, HydrologyStep, SimEngine,
+    SiteConfig, SiteInput, SiteOutput, SoaBatchInput, SoilTextureClass, StrictNewhall,
+    StrictThornthwaiteForcing, Thermal1DConfig, Thermal1DModel, ThermalModel, ThornthwaiteForcing,
     WaterTableConfig, WaterTableHydrology, WaterTableMode,
 };
 use rayon::prelude::*;
@@ -115,6 +115,80 @@ fn parse_texture(s: &str) -> SoilTextureClass {
     }
 }
 
+fn validate_soil_config_lengths(
+    n: usize,
+    soil_air_offset: &[f64],
+    amplitude: &[f64],
+    has_o_horizon: &[i32],
+    is_saturated: &[i32],
+) -> Result<()> {
+    if n == 0 {
+        return Ok(());
+    }
+    for (name, len) in [
+        ("soil_air_offset", soil_air_offset.len()),
+        ("amplitude", amplitude.len()),
+        ("has_o_horizon", has_o_horizon.len()),
+        ("is_saturated", is_saturated.len()),
+    ] {
+        if len != 1 && len != n {
+            return Err(Error::Other(format!(
+                "{name} length ({len}) must be 1 or n ({n})"
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[inline]
+fn site_config_at(
+    soil_air_offset: &[f64],
+    amplitude: &[f64],
+    has_o_horizon: &[i32],
+    is_saturated: &[i32],
+    is_metric: bool,
+    i: usize,
+) -> SiteConfig {
+    SiteConfig {
+        soil_air_offset: soil_air_offset[if soil_air_offset.len() == 1 { 0 } else { i }],
+        amplitude: amplitude[if amplitude.len() == 1 { 0 } else { i }],
+        has_o_horizon: has_o_horizon[if has_o_horizon.len() == 1 { 0 } else { i }] != 0,
+        is_saturated: is_saturated[if is_saturated.len() == 1 { 0 } else { i }] != 0,
+        is_metric,
+    }
+}
+
+fn run_per_site_soa<T, F, H>(
+    engine: &SimEngine<T, F, H>,
+    batch: &SoaBatchInput<'_>,
+    soil_air_offset: &[f64],
+    amplitude: &[f64],
+    has_o_horizon: &[i32],
+    is_saturated: &[i32],
+    is_metric: bool,
+) -> Vec<SiteOutput>
+where
+    T: ThermalModel + Sync,
+    F: ForcingModel + Sync,
+    H: HydrologyStep + Sync,
+{
+    (0..batch.len())
+        .into_par_iter()
+        .map(|i| {
+            let input = batch.site_input(i);
+            let cfg = site_config_at(
+                soil_air_offset,
+                amplitude,
+                has_o_horizon,
+                is_saturated,
+                is_metric,
+                i,
+            );
+            engine.run(&input, &cfg)
+        })
+        .collect()
+}
+
 /// Classic or strict Newhall vectorized batch runner using SoA `&[f64]` slices and `rayon`.
 #[extendr]
 #[allow(clippy::too_many_arguments)]
@@ -125,10 +199,10 @@ fn newhall_batch_rust(
     precip_flat: &[f64],
     awc: &[f64],
     elev: &[f64],
-    soil_air_offset: f64,
-    amplitude: f64,
-    has_o_horizon: bool,
-    is_saturated: bool,
+    soil_air_offset: &[f64],
+    amplitude: &[f64],
+    has_o_horizon: &[i32],
+    is_saturated: &[i32],
     is_metric: bool,
     strict: bool,
 ) -> Result<List> {
@@ -143,6 +217,10 @@ fn newhall_batch_rust(
             "Input slice lengths do not match n (or 12*n for temp/precip)".into(),
         ));
     }
+    if n == 0 {
+        return Ok(outputs_to_r_list(&[], false));
+    }
+    validate_soil_config_lengths(n, soil_air_offset, amplitude, has_o_horizon, is_saturated)?;
 
     let batch = SoaBatchInput {
         lat_dd: lat,
@@ -152,17 +230,45 @@ fn newhall_batch_rust(
         awc_mm: awc,
         elev_m: elev,
     };
-    let cfg = SiteConfig {
-        soil_air_offset,
-        amplitude,
-        has_o_horizon,
-        is_saturated,
-        is_metric,
-    };
-    let outputs = if strict {
-        StrictNewhall::default().run_batch_soa(&batch, &cfg)
+    let all_scalar = soil_air_offset.len() == 1
+        && amplitude.len() == 1
+        && has_o_horizon.len() == 1
+        && is_saturated.len() == 1;
+
+    let outputs = if all_scalar {
+        let cfg = site_config_at(
+            soil_air_offset,
+            amplitude,
+            has_o_horizon,
+            is_saturated,
+            is_metric,
+            0,
+        );
+        if strict {
+            StrictNewhall::default().run_batch_soa(&batch, &cfg)
+        } else {
+            ClassicNewhall::default().run_batch_soa(&batch, &cfg)
+        }
+    } else if strict {
+        run_per_site_soa(
+            &StrictNewhall::default(),
+            &batch,
+            soil_air_offset,
+            amplitude,
+            has_o_horizon,
+            is_saturated,
+            is_metric,
+        )
     } else {
-        ClassicNewhall::default().run_batch_soa(&batch, &cfg)
+        run_per_site_soa(
+            &ClassicNewhall::default(),
+            &batch,
+            soil_air_offset,
+            amplitude,
+            has_o_horizon,
+            is_saturated,
+            is_metric,
+        )
     };
     Ok(outputs_to_r_list(&outputs, false))
 }
@@ -216,10 +322,10 @@ fn newhall_batch_phase4_rust(
     sy: f64,
     k_lat: f64,
     texture: &str,
-    soil_air_offset: f64,
-    amplitude: f64,
-    has_o_horizon: bool,
-    is_saturated: bool,
+    soil_air_offset: &[f64],
+    amplitude: &[f64],
+    has_o_horizon: &[i32],
+    is_saturated: &[i32],
     strict_forcing: bool,
 ) -> Result<List> {
     let n = lat.len();
@@ -239,19 +345,24 @@ fn newhall_batch_phase4_rust(
             "Phase 4 input slice lengths do not match n (or 12*n for monthly slices)".into(),
         ));
     }
+    if n == 0 {
+        return Ok(outputs_to_r_list(&[], true));
+    }
+    validate_soil_config_lengths(n, soil_air_offset, amplitude, has_o_horizon, is_saturated)?;
 
     let tex = parse_texture(texture);
-    let cfg = SiteConfig {
-        soil_air_offset,
-        amplitude,
-        has_o_horizon,
-        is_saturated,
-        is_metric: true,
-    };
 
     let outputs: Vec<SiteOutput> = (0..n)
         .into_par_iter()
         .map(|i| {
+            let cfg = site_config_at(
+                soil_air_offset,
+                amplitude,
+                has_o_horizon,
+                is_saturated,
+                true,
+                i,
+            );
             let input = SiteInput {
                 lat_dd: lat[i],
                 lon_dd: lon[i],
