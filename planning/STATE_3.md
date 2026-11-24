@@ -16,7 +16,7 @@ Last Updated: 2026-11-22
 | --- | --- | --- | --- | --- | --- |
 | 1 | `3.1.1` | Implement `StrictThornthwaiteForcing` (`#1`, `#2`, `#7`, `#9`) | done | flash | `488ae8b` |
 | 1 | `3.1.2` | Implement `StrictThermal` (`#2`, `#3`, `#4`, `#5`, `#6`, `#8`, `#9`, `#10`) | done | flash | `5deb0f3` |
-| 2 | `3.2.1` | Wire `StrictHydrology`, `StrictNewhall`, and `lib.rs` exports | pending | flash | — |
+| 2 | `3.2.1` | Wire `StrictHydrology`, `StrictNewhall`, and `lib.rs` exports | done | flash | `eab2740` |
 | 3 | `3.3.1` | Expose `strict` and `strict_forcing` in `r-pkg` + `testthat` | pending | flash | — |
 | 3 | `3.3.2` | Add `strict_mode.rs` integration tests verifying Defects #1–#10 | pending | flash | — |
 
@@ -39,3 +39,11 @@ Last Updated: 2026-11-22
 - **Verification:** `cargo test -p newhall-core --lib thermal` (11 passed, 0 failed); Wave 1 full suite: 40 unit + 13 adversarial + 4 golden-master green, clippy & fmt clean
 - **Deviations:** none
 - **Gotchas for dependent tasks:** `StrictThermal::evaluate` expects `water_balance.mpe` already in mm (handled by `StrictThornthwaiteForcing` when `!config.is_metric`) and keeps `RegimeSubdivision1` (`q`) / `RegimeSubdivision2` (`div`) typed enums per `ThermalClassification`.
+
+## 3.2.1
+- **Status:** `done`
+- **Files created/changed:** `crates/newhall-core/src/engine.rs` (695 lines; +235/-4); `crates/newhall-core/src/lib.rs` (26 lines; +5/-3); `planning/tasks/3.2.1.todo.md`
+- **Code commit ID:** `eab2740` (cherry-picked from `4b41123`)
+- **Verification:** `cargo test --workspace --all-targets` (43 unit + 13 adversarial + 4 golden-master green), clippy & fmt clean
+- **Deviations:** Used `ClassicHydrology.simulate_hydrology(...)` unit-struct syntax instead of `ClassicHydrology::default()` to satisfy `clippy::default-constructed-unit-structs`.
+- **Gotchas for dependent tasks:** `StrictNewhall`, `StrictHydrology`, `StrictThornthwaiteForcing`, and `StrictThermal` are now exported at `newhall_core::*`; `SimEngine::run` sets `SiteOutput.water_holding_capacity` to raw `input.awc_mm` (unscaled when `is_metric = false`), while forcing, hydrology, day counters, and regimes use converted metric units.
