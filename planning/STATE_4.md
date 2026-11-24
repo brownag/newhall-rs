@@ -15,8 +15,8 @@ Last Updated: 2026-11-24
 | --- | --- | --- | --- | --- | --- |
 | 1 | `4.1.1` | Extend Rust FFI for per-site soil config vectors | done | flash | `0af774c` |
 | 1 | `4.1.2` | Add categorical level tables, schema helpers, and `terra` Suggests | done | flash | `4fdcb86` |
-| 2 | `4.2.1` | Refactor `newhall_batch` & `newhall_batch_phase4` into S3 generics (`default`, `data.frame`, `character`) | pending | flash | — |
-| 2 | `4.2.2` | Implement chunked `SpatRaster` S3 methods with `terra::set.cats()` | pending | flash | — |
+| 2 | `4.2.1` | Refactor `newhall_batch` & `newhall_batch_phase4` into S3 generics (`default`, `data.frame`, `character`) | done | flash | `7ed6fa0` |
+| 2 | `4.2.2` | Implement chunked `SpatRaster` S3 methods with `terra::set.cats()` | done | flash | `dd94e33` |
 | 3 | `4.3.1` | Sync `NAMESPACE`/docs and add `testthat` S3 + `SpatRaster` test suite | pending | flash | — |
 
 ## Task Reports
@@ -38,3 +38,19 @@ Last Updated: 2026-11-24
 - **verification:** `Rscript -e "source('r-pkg/R/categories.R'); stopifnot(length(.str_levels()) == 10L, length(.newhall_required_cols()) == 28L)"` -> PASS (exit 0)
 - **deviations:** none
 - **gotchas for dependent tasks:** `.normalize_unit_system(unitSystem)` returns scalar logical `TRUE`/`FALSE`. `.extract_df_inputs()` extracts `temp`/`precip` explicitly by `paste0("t", month.abb)`/`paste0("p", month.abb)` and returns `hasOHorizon`/`isSaturated` as logical vectors requiring `as.integer(as.logical(...))` before calling `newhall_batch_rust`.
+
+## 4.2.1
+- **status:** done
+- **files changed:** `r-pkg/R/newhall.R` (369 lines, +249/-18)
+- **code commit ID:** `7ed6fa0` (`feat(r-pkg): refactor batch runners into S3 generics`)
+- **verification:** `Rscript -e "parse('r-pkg/R/newhall.R')"` -> PASS (exit 0)
+- **deviations:** none
+- **gotchas for dependent tasks:** `NAMESPACE` and `man/*.Rd` must be regenerated in `4.3.1` via `roxygen2::roxygenise('r-pkg')` to export `newhall_batch_raw`, `newhall_batch_phase4_raw`, and all S3 methods (`default`, `data.frame`, `character`). `.default` preserves integer regime codes, whereas `.data.frame`/`.character` return decoded character regime names.
+
+## 4.2.2
+- **status:** done
+- **files created:** `r-pkg/R/raster.R` (411 lines)
+- **code commit ID:** `dd94e33` (`feat(r-pkg): add chunked SpatRaster S3 methods with categorical regime tables`)
+- **verification:** `Rscript -e "parse('r-pkg/R/raster.R')"` + mocked `terra` `1.9.51` in-memory/GeoTIFF smoke checks -> PASS (exit 0)
+- **deviations:** none
+- **gotchas for dependent tasks:** `terra::set.cats()` overwrites `names(out)[layer]` to `colnames(value)[2]`, so `.attach_regime_cats()` renames column 2 of `.regime_cat_df()` to each target layer name (`temperatureRegime`, `moistureRegime`, `regimeSubdivision1`, `regimeSubdivision2`). `newhall_batch_phase4.SpatRaster()` errors on non-metric `unitSystem`.
