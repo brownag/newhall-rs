@@ -1,10 +1,12 @@
 Package: newhallrs
 Title: Fast Rust-Backed Newhall Soil Moisture and Temperature Regime Simulation
 Version: 0.1.0
-Authors@R: person("Newhall", "Contributors", email = "newhall@example.com", role = c("aut", "cre"))
+Authors@R: person("Andrew Gene", "Brown", email = "brown.andrewg@gmail.com", role = c("aut", "cre"))
 Description: Vectorized Newhall Simulation Model with classic jNSMR parity and
     Phase 4 1D soil thermal and fluctuating water-table physics extensions.
 License: MIT + file LICENSE
+URL: https://github.com/brownag/newhall-rs
+BugReports: https://github.com/brownag/newhall-rs/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:

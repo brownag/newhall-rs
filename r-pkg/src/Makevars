@@ -5,6 +5,8 @@ PKG_LIBS = -L$(LIBDIR) -lnewhallrs
 
 all: $(SHLIB)
 
+.PHONY: $(STATLIB)
+
 $(SHLIB): $(STATLIB)
 
 $(STATLIB):
