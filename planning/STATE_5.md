@@ -18,7 +18,7 @@ Last Updated: 2026-11-24
 | 1 | `5.1.2` | Fix `DESCRIPTION`/`LICENSE` metadata and `R CMD check` doc hygiene | done | flash | `f7daf60` |
 | 2 | `5.2.1` | Add live `jNSMR` tabular and `SpatRaster` parity `testthat` suite | done | flash | `17851bc` |
 | 2 | `5.2.2` | Add reproducible `newhallrs` vs `jNSMR` raster benchmark & report | done | flash | `3085270` |
-| 3 | `5.3.1` | Run standalone `devtools::check('r-pkg')` gate & fix any remaining findings | pending | flash | — |
+| 3 | `5.3.1` | Run standalone `devtools::check('r-pkg')` gate & fix any remaining findings | blocked | flash | — |
 
 ## Task Reports
 
@@ -55,3 +55,13 @@ Last Updated: 2026-11-24
 - **verification:** `Rscript r-pkg/inst/benchmarks/bench_jnsmr.R` PASS (PRISM: `0.0230s` vs `9.0730s`, `394.5x` speedup; Daymet: `0.0230s` vs `9.1160s`, `396.3x` speedup; `816,957` vs `~2,066` valid cells/s).
 - **deviations:** none
 - **gotchas:** `jNSMR` requires attaching (`library(jNSMR)`) so `.onAttach()` initializes `options(jNSMR.NSM_VERSION)`. Clean `r-pkg/src/rust/target/` or set `TMPDIR` before `devtools::check('r-pkg')` if `/tmp` is tight.
+
+## 5.3.1
+- **status:** blocked (all R/doc/metadata/test checks clean; 2 compiled-code/Rust warnings outside 5.3.1 file scope)
+- **files:** none modified (created `planning/tasks/5.3.1.todo.md`)
+- **commit:** none
+- **verification:**
+  - `TMPDIR=.development/tmp Rscript -e "devtools::check('r-pkg', error_on = 'warning')"` -> `0 errors | 2 warnings | 0 notes`
+  - `Rscript -e "devtools::test('r-pkg')"` -> PASS (`[ FAIL 0 | WARN 0 | SKIP 0 | PASS 217 ]`)
+- **deviations:** stopped at scope boundary (did not edit `r-pkg/src/Makevars` or `r-pkg/src/rust/Cargo.toml`)
+- **blocker:** (1) `checking Rust compilation` (`--as-cran`) requires logging `rustc --version` in `r-pkg/src/Makevars`; (2) `checking compiled code` on R 4.6.2 flags `_exit`/`abort`/`exit` in `libnewhallrs.a` and non-API R calls (`BODY`, `CLOENV`, `DATAPTR`, `ENCLOS`, `FORMALS`, `R_NamespaceRegistry`, `Rf_findVarInFrame`) from `extendr-api` `0.7.1`.
