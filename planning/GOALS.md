@@ -1,11 +1,14 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-24
-Source State: STATE_6.md (G16, G5, and G10 completed — all planned goals complete)
+Source State: STATE_6.md (Magic Wand pass 2 — release, CI, packaging, and validation horizon)
 
 ## Circled Goal (Active)
 
-- None (all goals in `planning/GOALS.md` are complete).
+- **[G19]** Automated CI/CD pipeline (`.github/workflows/ci.yml`) enforces Rust tests/clippy/fmt, `newhall-core` sync parity, and R `testthat` + `R CMD check` on every push and PR.
+  - Why now: Highest unblocking leverage — every downstream goal (`G20`–`G28`) touches Rust, `r-pkg`, or both; automating verification and `sync-core.sh` drift detection prevents silent regressions across all future waves.
+  - Exit criteria: `.github/workflows/ci.yml` is valid YAML and every CI command (Rust workspace checks, `sync-core.sh --check` drift check, and R `R CMD check` / `testthat`) passes cleanly locally.
+  - First action: Add `--check` drift verification to `r-pkg/tools/sync-core.sh` and scaffold `.github/workflows/ci.yml`.
 
 ## Completed Goals
 
@@ -30,15 +33,28 @@ Source State: STATE_6.md (G16, G5, and G10 completed — all planned goals compl
 
 ## Sequenced Goals (Dependency DAG)
 
-- None.
+- **[G20]** `r-pkg` passes `R CMD check --as-cran` cleanly with zero errors, warnings, or notes, `Makevars` Rust source prerequisites, `Makevars.win`/CRAN vendoring hygiene, and real maintainer metadata in `DESCRIPTION`.
+  - Depends on: G19
+- **[G21]** Root `README.md`, `LICENSE` (MIT), and `CHANGELOG.md` document Rust (`newhall-core`, `newhall-cli`) and R (`newhallrs`) quickstarts, classic vs. strict vs. Phase 4 modes, and benchmark highlights.
+  - Depends on: G19
+- **[G25]** `newhall-core` is crates.io-ready with complete rustdoc (`#![warn(missing_docs)]`), crate metadata (`repository`, `readme`, `keywords`, `categories`), and passing `cargo test --no-default-features` + `cargo package --list`.
+  - Depends on: G19, G21
+- **[G22]** User-facing R vignette(s) in `r-pkg/vignettes/` demonstrate tabular, `terra::SpatRaster`, strict-mode, and Phase 4 workflows and build cleanly under `R CMD build`.
+  - Depends on: G20
+- **[G24]** `newhall_batch_phase4.character` (CSV/path method) completes full S3 parity with `newhall_batch` (`default`, `data.frame`, `character`, `SpatRaster`), with testthat coverage.
+  - Depends on: G20
+- **[G28]** Automated release workflow (`.github/workflows/release.yml`) builds and attaches `newhall-cli` binaries and the `newhallrs` R source tarball on `v*` tags with synchronized versions.
+  - Depends on: G19, G20, G21, G25
 
 ## Independent Backlog
 
-- None.
+- **[G23]** `newhall-cli run` supports `--strict` and Phase 4 execution from CSV with unit tests.
+- **[G26]** Phase 4 physics has deterministic analytical and soil-profile reference validation tests (harmonic damping depth, Stefan freeze-front depth, wetland/permafrost profiles).
 
 ## Deferred
 
-- None.
+- **[G27]** `newhall-core` supports optional `serde` serialization behind a `serde` Cargo feature.
+  - Trigger: When JSON/Parquet/Arrow pipelines or `--format json` CLI output are requested.
 
 ## Blocked / Pruned
 
