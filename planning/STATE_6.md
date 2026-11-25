@@ -15,8 +15,8 @@ Last Updated: 2026-11-24
 | --- | --- | --- | --- | --- | --- |
 | 1 | `6.1.1` | Fast Gardner powers & lean `SoilState` in `newhall-core` (`G16`) | done | flash | `25c3c0d` |
 | 1 | `6.1.2` | Direct R vector allocation in `r-pkg` `outputs_to_r_list()` (`G16`) | done | flash | `6d9242c` |
-| 2 | `6.2.1` | Add `newhall-cli` `run`, `verify`, and `bench` commands (`G5`) | pending | flash | — |
-| 2 | `6.2.2` | Write `ARCHITECTURE.md` physics & extension guide (`G10`) | pending | flash | — |
+| 2 | `6.2.1` | Add `newhall-cli` `run`, `verify`, and `bench` commands (`G5`) | done | flash | `763dd5e` |
+| 2 | `6.2.2` | Write `ARCHITECTURE.md` physics & extension guide (`G10`) | done | flash | `837cd16` |
 | 3 | `6.3.1` | Sync `newhall-core` to `r-pkg`, run full suites & refresh benchmarks | pending | flash | — |
 
 ## Task Reports
@@ -38,3 +38,19 @@ Last Updated: 2026-11-24
 - **verification:** `cargo clippy --manifest-path r-pkg/src/rust/Cargo.toml -- -D warnings` PASS; `devtools::test('r-pkg')` PASS (`217` PASS, `0` FAIL, `0` WARN).
 - **deviations:** none
 - **gotchas:** `/tmp` is tight; set `TMPDIR=.development/tmp` for R `devtools::test`/`check` if needed.
+
+## 6.2.1
+- **status:** done
+- **files:** edited `crates/newhall-cli/src/main.rs` (`+900/-13`)
+- **commit:** `763dd5e`
+- **verification:** `cargo test -p newhall-cli` PASS (6 passed); `verify` PASS on `pa_batch_metric.csv` (108 rows), `prism_sample.csv` (18,984 rows), `daymet_sample.csv` (18,984 rows); `bench 100000` PASS (`ClassicNewhall (rayon)`: `5,025,564 sims/sec`, `0.20 us/site`).
+- **deviations:** none
+- **gotchas:** `run` and `verify` accept both 28/19-col and 47-col jNSM CSVs.
+
+## 6.2.2
+- **status:** done
+- **files:** created `ARCHITECTURE.md` (235 lines)
+- **commit:** `837cd16`
+- **verification:** `test -s ARCHITECTURE.md` PASS; all 27 backticked paths, 41 tree paths, and 177 symbols verified existing (0 missing).
+- **deviations:** none
+- **gotchas:** none.
