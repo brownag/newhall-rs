@@ -1,16 +1,18 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-24
-Source State: STATE_4.md (G7 R S3 & SpatRaster API completed)
+Source State: STATE_5.md (G8 R CMD check hygiene, live jNSMR parity, and raster benchmark completed)
 
 ## Circled Goal (Active)
 
-- **[G8]** `R CMD check` passes cleanly on `r-pkg`, `testthat` verifies end-to-end parity with `jNSMR` on sample tabular and raster datasets, and a reproducible benchmark reports speedup over `jNSMR` on the sample raster dataset.
-  - Why now: All prerequisites (`G2`, `G4`, `G7`) are complete; validates `r-pkg` as a release-quality drop-in `jNSMR` replacement and locks in a reproducible R speedup baseline before `G16` optimizations.
-  - Exit criteria: `devtools::check('r-pkg')` exits 0 with 0 errors and 0 warnings; `devtools::test('r-pkg')` verifies sample-raster parity with `jNSMR` (`<= 1e-9` float tolerance, 100% exact categorical match); benchmark script reports wall-clock speedup over `jNSMR`.
-  - First action: Run `Rscript -e "devtools::check('r-pkg')"` and inspect the sample raster dataset in `/home/andrew/workspace/jNSMR` to inventory `R CMD check` findings and parity fixture inputs.
+- **[G16]** `newhall-core` uses fast integer/sqrt powers in Gardner capillary rise and a lean `SoilState` without unconditional `[f64; 360]` copies, and `r-pkg` allocates R output vectors directly without intermediate `Vec` copies, while keeping all Rust and R tests green and improving measured throughput.
+  - Why now: Locks in the final `SoilState` layout, Gardner fast-math, and `r-pkg` allocation pattern before `G5` benchmarks multi-core `newhall-cli` throughput and before `G10` documents the final architecture in `ARCHITECTURE.md`.
+  - Exit criteria: All Rust tests (`68+`), `clippy`/`fmt`, and R `testthat` (`217+`) pass with 0 failures; `newhall-cli bench` and `bench_jnsmr.R` confirm improved or parity-maintained throughput.
+  - First action: Inspect `crates/newhall-core/src/water_table.rs`, `crates/newhall-core/src/types.rs`, and `r-pkg/src/rust/src/lib.rs` to draft `planning/EXECUTION_PLAN_6.md` covering `G16` + `G5` + `G10`.
 
 ## Completed Goals
+
+- **[G8]** `r-pkg` standalone tarball staging (`sync-core.sh`, `.Rbuildignore`), CRAN MIT `LICENSE`/`DESCRIPTION` hygiene, live `jNSMR` tabular & `SpatRaster` parity suite (`85` PASS, `217` total R tests), and reproducible raster benchmark (`~395x` speedup over `jNSMR`) completed (`STATE_5.md`, `9618e7a`).
 
 - **[G1]** Local reference repositories (`~/workspace/jNSMR` and `~/workspace/jNSMR/java`) audited (`planning/AUDIT_JNSM.md`).
 - **[G2]** Deterministic golden-master test fixtures generated from `jNSMR` (`crates/newhall-core/tests/fixtures/`).
@@ -28,13 +30,14 @@ Source State: STATE_4.md (G7 R S3 & SpatRaster API completed)
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
-  - Depends on: G8
+- **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
+  - Depends on: G16
+- **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
+  - Depends on: G16
 
 ## Independent Backlog
 
-- **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
-- **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
+- None.
 
 ## Deferred
 
