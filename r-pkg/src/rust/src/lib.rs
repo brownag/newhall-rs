@@ -7,103 +7,126 @@ use newhall_core::{
 };
 use rayon::prelude::*;
 
+#[inline]
+fn real_slice_mut(vec: &mut Doubles) -> &mut [f64] {
+    vec.as_robj_mut()
+        .as_real_slice_mut()
+        .expect("Doubles must expose a mutable real slice")
+}
+
+#[inline]
+fn int_slice_mut(vec: &mut Integers) -> &mut [i32] {
+    vec.as_robj_mut()
+        .as_integer_slice_mut()
+        .expect("Integers must expose a mutable integer slice")
+}
+
 fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
     let n = outputs.len();
-    let mut annual_rainfall = Vec::with_capacity(n);
-    let mut water_holding_capacity = Vec::with_capacity(n);
-    let mut annual_water_balance = Vec::with_capacity(n);
-    let mut annual_pet = Vec::with_capacity(n);
-    let mut summer_water_balance = Vec::with_capacity(n);
-    let mut dry_after_ss = Vec::with_capacity(n);
-    let mut moist_after_ws = Vec::with_capacity(n);
-    let mut cum_dry = Vec::with_capacity(n);
-    let mut cum_moist_dry = Vec::with_capacity(n);
-    let mut cum_moist = Vec::with_capacity(n);
-    let mut cum_dry_5c = Vec::with_capacity(n);
-    let mut cum_moist_dry_5c = Vec::with_capacity(n);
-    let mut cum_moist_5c = Vec::with_capacity(n);
-    let mut cons_moist = Vec::with_capacity(n);
-    let mut cons_moist_8c = Vec::with_capacity(n);
-    let mut str_code = Vec::with_capacity(n);
-    let mut smr_code = Vec::with_capacity(n);
-    let mut sub1_code = Vec::with_capacity(n);
-    let mut sub2_code = Vec::with_capacity(n);
-    let mut sat_days_mcs = Vec::with_capacity(if include_phase4 { n } else { 0 });
-    let mut aquic_bio_days = Vec::with_capacity(if include_phase4 { n } else { 0 });
+    let mut annual_rainfall = Doubles::new(n);
+    let mut water_holding_capacity = Doubles::new(n);
+    let mut annual_water_balance = Doubles::new(n);
+    let mut annual_pet = Doubles::new(n);
+    let mut summer_water_balance = Doubles::new(n);
+    let mut dry_after_ss = Integers::new(n);
+    let mut moist_after_ws = Integers::new(n);
+    let mut cum_dry = Integers::new(n);
+    let mut cum_moist_dry = Integers::new(n);
+    let mut cum_moist = Integers::new(n);
+    let mut cum_dry_5c = Integers::new(n);
+    let mut cum_moist_dry_5c = Integers::new(n);
+    let mut cum_moist_5c = Integers::new(n);
+    let mut cons_moist = Integers::new(n);
+    let mut cons_moist_8c = Integers::new(n);
+    let mut str_code = Integers::new(n);
+    let mut smr_code = Integers::new(n);
+    let mut sub1_code = Integers::new(n);
+    let mut sub2_code = Integers::new(n);
+    let mut phase4 = include_phase4.then(|| (Integers::new(n), Integers::new(n)));
 
-    for o in outputs {
-        annual_rainfall.push(o.annual_rainfall);
-        water_holding_capacity.push(o.water_holding_capacity);
-        annual_water_balance.push(o.annual_water_balance);
-        annual_pet.push(o.annual_potential_evapotranspiration);
-        summer_water_balance.push(o.summer_water_balance);
-        dry_after_ss.push(o.dry_days_after_summer_solstice);
-        moist_after_ws.push(o.moist_days_after_winter_solstice);
-        cum_dry.push(o.num_cumulative_days_dry);
-        cum_moist_dry.push(o.num_cumulative_days_moist_dry);
-        cum_moist.push(o.num_cumulative_days_moist);
-        cum_dry_5c.push(o.num_cumulative_days_dry_over_5c);
-        cum_moist_dry_5c.push(o.num_cumulative_days_moist_dry_over_5c);
-        cum_moist_5c.push(o.num_cumulative_days_moist_over_5c);
-        cons_moist.push(o.num_consecutive_days_moist_in_some_parts);
-        cons_moist_8c.push(o.num_consecutive_days_moist_in_some_parts_over_8c);
-        str_code.push(o.temperature_regime.map(|r| r as i32));
-        smr_code.push(o.moisture_regime as i32);
-        sub1_code.push(o.regime_subdivision1 as i32);
-        sub2_code.push(o.regime_subdivision2 as i32);
-        if include_phase4 {
-            sat_days_mcs.push(o.sat_days_mcs);
-            aquic_bio_days.push(o.aquic_bio_days);
+    {
+        let annual_rainfall_s = real_slice_mut(&mut annual_rainfall);
+        let water_holding_capacity_s = real_slice_mut(&mut water_holding_capacity);
+        let annual_water_balance_s = real_slice_mut(&mut annual_water_balance);
+        let annual_pet_s = real_slice_mut(&mut annual_pet);
+        let summer_water_balance_s = real_slice_mut(&mut summer_water_balance);
+        let dry_after_ss_s = int_slice_mut(&mut dry_after_ss);
+        let moist_after_ws_s = int_slice_mut(&mut moist_after_ws);
+        let cum_dry_s = int_slice_mut(&mut cum_dry);
+        let cum_moist_dry_s = int_slice_mut(&mut cum_moist_dry);
+        let cum_moist_s = int_slice_mut(&mut cum_moist);
+        let cum_dry_5c_s = int_slice_mut(&mut cum_dry_5c);
+        let cum_moist_dry_5c_s = int_slice_mut(&mut cum_moist_dry_5c);
+        let cum_moist_5c_s = int_slice_mut(&mut cum_moist_5c);
+        let cons_moist_s = int_slice_mut(&mut cons_moist);
+        let cons_moist_8c_s = int_slice_mut(&mut cons_moist_8c);
+        let str_code_s = int_slice_mut(&mut str_code);
+        let smr_code_s = int_slice_mut(&mut smr_code);
+        let sub1_code_s = int_slice_mut(&mut sub1_code);
+        let sub2_code_s = int_slice_mut(&mut sub2_code);
+        let mut phase4_s = phase4
+            .as_mut()
+            .map(|(sat, aquic)| (int_slice_mut(sat), int_slice_mut(aquic)));
+
+        let na_int = Rint::na().inner();
+        for (i, o) in outputs.iter().enumerate() {
+            annual_rainfall_s[i] = o.annual_rainfall;
+            water_holding_capacity_s[i] = o.water_holding_capacity;
+            annual_water_balance_s[i] = o.annual_water_balance;
+            annual_pet_s[i] = o.annual_potential_evapotranspiration;
+            summer_water_balance_s[i] = o.summer_water_balance;
+            dry_after_ss_s[i] = o.dry_days_after_summer_solstice;
+            moist_after_ws_s[i] = o.moist_days_after_winter_solstice;
+            cum_dry_s[i] = o.num_cumulative_days_dry;
+            cum_moist_dry_s[i] = o.num_cumulative_days_moist_dry;
+            cum_moist_s[i] = o.num_cumulative_days_moist;
+            cum_dry_5c_s[i] = o.num_cumulative_days_dry_over_5c;
+            cum_moist_dry_5c_s[i] = o.num_cumulative_days_moist_dry_over_5c;
+            cum_moist_5c_s[i] = o.num_cumulative_days_moist_over_5c;
+            cons_moist_s[i] = o.num_consecutive_days_moist_in_some_parts;
+            cons_moist_8c_s[i] = o.num_consecutive_days_moist_in_some_parts_over_8c;
+            str_code_s[i] = o.temperature_regime.map_or(na_int, |r| r as i32);
+            smr_code_s[i] = o.moisture_regime as i32;
+            sub1_code_s[i] = o.regime_subdivision1 as i32;
+            sub2_code_s[i] = o.regime_subdivision2 as i32;
+            if let Some((sat_s, aquic_s)) = &mut phase4_s {
+                sat_s[i] = o.sat_days_mcs;
+                aquic_s[i] = o.aquic_bio_days;
+            }
         }
     }
 
-    if include_phase4 {
-        list!(
-            annualRainfall = annual_rainfall,
-            waterHoldingCapacity = water_holding_capacity,
-            annualWaterBalance = annual_water_balance,
-            annualPotentialEvapotranspiration = annual_pet,
-            summerWaterBalance = summer_water_balance,
-            dryDaysAfterSummerSolstice = dry_after_ss,
-            moistDaysAfterWinterSolstice = moist_after_ws,
-            numCumulativeDaysDry = cum_dry,
-            numCumulativeDaysMoistDry = cum_moist_dry,
-            numCumulativeDaysMoist = cum_moist,
-            numCumulativeDaysDryOver5C = cum_dry_5c,
-            numCumulativeDaysMoistDryOver5C = cum_moist_dry_5c,
-            numCumulativeDaysMoistOver5C = cum_moist_5c,
-            numConsecutiveDaysMoistInSomeParts = cons_moist,
-            numConsecutiveDaysMoistInSomePartsOver8C = cons_moist_8c,
-            temperatureRegime = str_code,
-            moistureRegime = smr_code,
-            regimeSubdivision1 = sub1_code,
-            regimeSubdivision2 = sub2_code,
-            satDaysMcs = sat_days_mcs,
-            aquicBioDays = aquic_bio_days
-        )
-    } else {
-        list!(
-            annualRainfall = annual_rainfall,
-            waterHoldingCapacity = water_holding_capacity,
-            annualWaterBalance = annual_water_balance,
-            annualPotentialEvapotranspiration = annual_pet,
-            summerWaterBalance = summer_water_balance,
-            dryDaysAfterSummerSolstice = dry_after_ss,
-            moistDaysAfterWinterSolstice = moist_after_ws,
-            numCumulativeDaysDry = cum_dry,
-            numCumulativeDaysMoistDry = cum_moist_dry,
-            numCumulativeDaysMoist = cum_moist,
-            numCumulativeDaysDryOver5C = cum_dry_5c,
-            numCumulativeDaysMoistDryOver5C = cum_moist_dry_5c,
-            numCumulativeDaysMoistOver5C = cum_moist_5c,
-            numConsecutiveDaysMoistInSomeParts = cons_moist,
-            numConsecutiveDaysMoistInSomePartsOver8C = cons_moist_8c,
-            temperatureRegime = str_code,
-            moistureRegime = smr_code,
-            regimeSubdivision1 = sub1_code,
-            regimeSubdivision2 = sub2_code
-        )
+    let mut pairs: Vec<(&'static str, Robj)> =
+        Vec::with_capacity(if include_phase4 { 21 } else { 19 });
+    pairs.extend([
+        ("annualRainfall", annual_rainfall.into()),
+        ("waterHoldingCapacity", water_holding_capacity.into()),
+        ("annualWaterBalance", annual_water_balance.into()),
+        ("annualPotentialEvapotranspiration", annual_pet.into()),
+        ("summerWaterBalance", summer_water_balance.into()),
+        ("dryDaysAfterSummerSolstice", dry_after_ss.into()),
+        ("moistDaysAfterWinterSolstice", moist_after_ws.into()),
+        ("numCumulativeDaysDry", cum_dry.into()),
+        ("numCumulativeDaysMoistDry", cum_moist_dry.into()),
+        ("numCumulativeDaysMoist", cum_moist.into()),
+        ("numCumulativeDaysDryOver5C", cum_dry_5c.into()),
+        ("numCumulativeDaysMoistDryOver5C", cum_moist_dry_5c.into()),
+        ("numCumulativeDaysMoistOver5C", cum_moist_5c.into()),
+        ("numConsecutiveDaysMoistInSomeParts", cons_moist.into()),
+        (
+            "numConsecutiveDaysMoistInSomePartsOver8C",
+            cons_moist_8c.into(),
+        ),
+        ("temperatureRegime", str_code.into()),
+        ("moistureRegime", smr_code.into()),
+        ("regimeSubdivision1", sub1_code.into()),
+        ("regimeSubdivision2", sub2_code.into()),
+    ]);
+    if let Some((sat_days_mcs, aquic_bio_days)) = phase4 {
+        pairs.push(("satDaysMcs", sat_days_mcs.into()));
+        pairs.push(("aquicBioDays", aquic_bio_days.into()));
     }
+    List::from_pairs(pairs)
 }
 
 fn parse_texture(s: &str) -> SoilTextureClass {
