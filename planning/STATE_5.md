@@ -16,8 +16,8 @@ Last Updated: 2026-11-24
 | --- | --- | --- | --- | --- | --- |
 | 1 | `5.1.1` | Stage `newhall-core` for standalone R tarballs & add `.Rbuildignore` | done | flash | `6ae3f7b` |
 | 1 | `5.1.2` | Fix `DESCRIPTION`/`LICENSE` metadata and `R CMD check` doc hygiene | done | flash | `f7daf60` |
-| 2 | `5.2.1` | Add live `jNSMR` tabular and `SpatRaster` parity `testthat` suite | pending | flash | — |
-| 2 | `5.2.2` | Add reproducible `newhallrs` vs `jNSMR` raster benchmark & report | pending | flash | — |
+| 2 | `5.2.1` | Add live `jNSMR` tabular and `SpatRaster` parity `testthat` suite | done | flash | `17851bc` |
+| 2 | `5.2.2` | Add reproducible `newhallrs` vs `jNSMR` raster benchmark & report | done | flash | `3085270` |
 | 3 | `5.3.1` | Run standalone `devtools::check('r-pkg')` gate & fix any remaining findings | pending | flash | — |
 
 ## Task Reports
@@ -39,3 +39,19 @@ Last Updated: 2026-11-24
 - **verification:** `read.dcf("r-pkg/DESCRIPTION")` check PASS; `tools::checkRd()`, `codoc()`, `undoc()`, `checkDocFiles()`, `checkDocStyle()` PASS (0 findings).
 - **deviations:** none (added `Imports: utils` per Q1 approval).
 - **gotchas:** none.
+
+## 5.2.1
+- **status:** done
+- **files:** created `r-pkg/tests/testthat/test-jnsmr-parity.R` (83 lines)
+- **commit:** `17851bc`
+- **verification:** `Rscript -e "devtools::test('r-pkg', filter = 'jnsmr-parity')"` PASS (`[ FAIL 0 | WARN 0 | SKIP 0 | PASS 85 ]`, 2.0 s).
+- **deviations:** none
+- **gotchas:** `terra::nlyr()` returns `double` (`19`); `jNSMR` returns `integer` for day-count CSV columns whereas `newhallrs` returns `double`.
+
+## 5.2.2
+- **status:** done
+- **files:** created `r-pkg/inst/benchmarks/bench_jnsmr.R` (139 lines), `planning/benchmarks/jnsmr_raster_benchmark.md` (70 lines)
+- **commit:** `3085270`
+- **verification:** `Rscript r-pkg/inst/benchmarks/bench_jnsmr.R` PASS (PRISM: `0.0230s` vs `9.0730s`, `394.5x` speedup; Daymet: `0.0230s` vs `9.1160s`, `396.3x` speedup; `816,957` vs `~2,066` valid cells/s).
+- **deviations:** none
+- **gotchas:** `jNSMR` requires attaching (`library(jNSMR)`) so `.onAttach()` initializes `options(jNSMR.NSM_VERSION)`. Clean `r-pkg/src/rust/target/` or set `TMPDIR` before `devtools::check('r-pkg')` if `/tmp` is tight.
