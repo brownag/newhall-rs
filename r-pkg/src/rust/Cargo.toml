@@ -13,3 +13,7 @@ name = "newhallrs"
 extendr-api = "0.8"
 newhall-core = { path = "newhall-core" }
 rayon = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
