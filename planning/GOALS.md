@@ -5,16 +5,14 @@ Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root
 
 ## Circled Goal (Active)
 
-- **[G29]** `r-pkg` removes `jNSMR` from `DESCRIPTION` `Suggests` and gates live `jNSMR` parity checks cleanly so `R CMD check --as-cran` has zero non-CRAN `Suggests` or unstated-dependency notes while local `jNSMR` parity remains runnable.
-  - Why now: Removes the `Suggests not in mainstream repositories: jNSMR` NOTE and eliminates the `_R_CHECK_FORCE_SUGGESTS_=false` CI workaround before any downstream R package work (`G22`, `G24`, `G28`).
-  - Exit criteria: `jNSMR` is absent from `r-pkg/DESCRIPTION`; `R CMD check --as-cran --no-manual` reports no `Suggests` or `unstated dependencies in 'tests'` notes; local `jNSMR` parity verification still passes when `jNSMR` is installed.
-  - First action: Inspect `r-pkg/tests/testthat/test-jnsmr-parity.R` and decide between gated dynamic lookup vs. moving to `scripts/`.
-- **[G30]** `r-pkg` investigates and remediates the `R CMD check --as-cran` `checking compiled code` WARNING (`R_NamespaceRegistry` non-API call and `_exit`/`abort`/`exit` symbols in `libnewhallrs.a`).
-  - Why now: Sole remaining WARNING blocking a 0-ERROR / 0-WARNING `R CMD check --as-cran` gate before public release (`G28`).
-  - Exit criteria: `R CMD check --as-cran --no-manual` reports 0 WARNINGs on `checking compiled code` (or documents exact upstream `extendr-api` / Rust `std` blocker with remediation path).
-  - First action: Inspect `nm -u` on `libnewhallrs.a` and check `extendr-api` version/features for `R_NamespaceRegistry` and `panic`/`exit` symbols.
+- **[G30]** `r-pkg` eliminates the remaining `R CMD check --as-cran` `checking compiled code` WARNING (`abort` from Rust `std::sys::pal::unix::abort_internal` in `libnewhallrs.a`; `R_NamespaceRegistry`, `_exit`, and `exit` already eliminated in `691205e`).
+  - Why now: Sole remaining WARNING in `R CMD check --as-cran --no-manual`.
+  - Exit criteria: `R CMD check --as-cran --no-manual` reports 0 ERRORs and 0 WARNINGs.
+  - First action: Decide between `#![no_std]` C-API bridge (no `extendr-api`/`std`) vs. linker symbol-wrapping / CRAN Rust `abort` policy.
 
 ## Completed Goals
+
+- **[G29]** `r-pkg` removed `jNSMR` from `DESCRIPTION` `Suggests`, gated `test-jnsmr-parity.R` with `skip_on_cran()` + `requireNamespace("jNSMR")` + `getExportedValue()`, and removed `_R_CHECK_FORCE_SUGGESTS_=false` from CI (`STATE_8.md`, `e5d2342`).
 
 - **[G19]** Automated CI/CD pipeline (`.github/workflows/ci.yml`) and `r-pkg/tools/sync-core.sh --check` drift verification (`STATE_7.md`, `95c0d50`).
 - **[G20]** `r-pkg` `Makevars` `.PHONY: $(STATLIB)` Rust tracking, `Makevars.win`, `DESCRIPTION`/`LICENSE` metadata, and `R CMD check --as-cran` / `testthat` verification (`STATE_7.md`, `e3cb07b`, `a95f33e`; upstream `extendr-api 0.8.2` / R 4.6.2 compiled-code warning noted).
