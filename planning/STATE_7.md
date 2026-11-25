@@ -16,8 +16,8 @@ Last Updated: 2026-11-24
 | 1 | `7.1.1` | Add `sync-core.sh --check` and `.github/workflows/ci.yml` (`G19`) | done | flash | `95c0d50` |
 | 1 | `7.1.2` | Create root `README.md`, `LICENSE`, and `CHANGELOG.md` (`G21`) | done | flash | `91dd2a8` |
 | 1 | `7.1.3` | `r-pkg` `Makevars` Rust tracking, `Makevars.win`, and `DESCRIPTION`/`LICENSE` metadata (`G20`) | done | flash | `e3cb07b` |
-| 2 | `7.2.1` | `newhall-core` crates.io metadata, `#![warn(missing_docs)]`, and `--no-default-features` (`G25`) | in_progress | flash | — |
-| 3 | `7.3.1` | Sync `newhall-core` to `r-pkg`, run full Rust + `R CMD check --as-cran` + `testthat` gate | pending | flash | — |
+| 2 | `7.2.1` | `newhall-core` crates.io metadata, `#![warn(missing_docs)]`, and `--no-default-features` (`G25`) | done | flash | `09c0f79` |
+| 3 | `7.3.1` | Sync `newhall-core` to `r-pkg`, run full Rust + `R CMD check --as-cran` + `testthat` gate | in_progress | flash | — |
 
 ## Task Reports
 
@@ -40,3 +40,9 @@ Last Updated: 2026-11-24
 - **files:** edited `r-pkg/src/Makevars` (`.PHONY: $(STATLIB)`), created `r-pkg/src/Makevars.win`, updated `r-pkg/DESCRIPTION` and `r-pkg/LICENSE`.
 - **verification:** `R CMD INSTALL` + touch-rebuild + `devtools::test('r-pkg')` PASS (`217` PASS, `0` FAIL, `0` WARN, `0` SKIP).
 - **gotchas:** Use absolute `TMPDIR="$PWD/.development/tmp"` for `devtools::test('r-pkg')`.
+
+### 7.2.1
+- **status:** done | **commit:** `09c0f79`
+- **files:** updated `crates/newhall-core/Cargo.toml` (+6), `src/{lib,traits,engine,thermal_1d,water_table,types}.rs` (+109 rustdoc lines).
+- **verification:** `cargo fmt --check`, `cargo clippy -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc -p newhall-core --no-deps`, `cargo test --workspace --all-targets` (`76` PASS), `cargo test -p newhall-core --no-default-features` (`70` PASS), `cargo package -p newhall-core --list --allow-dirty` (21 files) all PASS.
+- **gotchas:** `r-pkg/src/rust/newhall-core/` is out of sync until `7.3.1` runs `r-pkg/tools/sync-core.sh`.
