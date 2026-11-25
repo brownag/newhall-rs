@@ -68,3 +68,35 @@ Per-replicate elapsed times (seconds):
  prism_issr800_sample.tif  18984      18790      0.0230      9.0730  816957            2071          394.5x 
  daymet_issr800_sample.tif 18984      18790      0.0230      9.1160  816957            2061          396.3x 
 ```
+
+## Post-`G16` Comparison (`newhall-core` Synced + Direct R Vector Allocation)
+
+- **Timestamp (UTC):** `2026-11-25T02:11:17Z`
+- **Changes Included:** Fast integer/sqrt Gardner (1958) capillary rise powers (`25c3c0d`), lean `HalfMonthlyWaterTable([f64; 24])` in `SoilState` (`3,784 B -> 1,096 B`, `25c3c0d`), direct `extendr_api::Doubles`/`Integers` allocation in `outputs_to_r_list()` (`6d9242c`), and synced `r-pkg/src/rust/newhall-core/`.
+
+### Updated `bench_jnsmr.R` Results
+
+| Raster | Total Cells | Valid Cells | Baseline `newhallrs` (s) | Post-`G16` `newhallrs` (s) | Post-`G16` `jNSMR` (s) | Post-`G16` `newhallrs` Valid Cells/s | Post-`G16` Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `prism_issr800_sample.tif` | 18,984 | 18,790 | 0.0230 | 0.0240 | 9.1120 | 782,917 | 379.7x |
+| `daymet_issr800_sample.tif` | 18,984 | 18,790 | 0.0230 | 0.0220 | 9.0940 | 854,091 | 413.4x |
+
+Per-replicate `bench_jnsmr.R` timings (`1` warm-up + `3` timed replicates):
+- `prism_issr800_sample.tif` | `newhallrs`: `[0.0480, 0.0240, 0.0240]` | `jNSMR`: `[9.3210, 9.1120, 9.0290]`
+- `daymet_issr800_sample.tif` | `newhallrs`: `[0.0220, 0.0230, 0.0220]` | `jNSMR`: `[9.1230, 9.0940, 9.0790]`
+
+At `18,984` cells, end-to-end `newhall_batch(SpatRaster)` wall-clock time (`22–24 ms`) is dominated by `terra` raster extraction and reconstruction rather than the Rust simulation kernel (`~4 ms` for `18,790` cells), so the median stays within the `1–2 ms` run-to-run variance band (`~783k–854k` valid cells/s vs `817k` baseline).
+
+### `newhall-cli bench 100000` (Post-`G16` Rust Core)
+
+```text
+ClassicNewhall (rayon)           : 100000 sites in 0.0213 s (   4705436 sims/sec,    0.21 us/site)
+WaterTable + ClassicThermal      : 100000 sites in 0.0325 s (   3075353 sims/sec,    0.33 us/site)
+Thermal1D + ClassicHydro         : 100000 sites in 9.8564 s (     10146 sims/sec,   98.56 us/site)
+Full Phase 4 (rayon)             : 100000 sites in 9.6480 s (     10365 sims/sec,   96.48 us/site)
+
+Single-thread stage breakdown (1000 sites):
+  ThornthwaiteForcing :      168.0 ns/site
+  WaterTableHydrology :     4088.6 ns/site
+  Thermal1DModel      :  1486686.3 ns/site
+```

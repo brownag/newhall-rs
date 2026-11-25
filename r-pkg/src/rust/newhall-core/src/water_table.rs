@@ -6,7 +6,7 @@ use std::f64::consts::TAU;
 use crate::hydrology::{equilibrate_half_month, inspect_mcs, simulate_half_month, storm_recharge};
 use crate::thermal_1d::SoilTextureClass;
 use crate::traits::HydrologyStep;
-use crate::types::{SiteConfig, SiteInput, SoilState, WaterBalance};
+use crate::types::{HalfMonthlyWaterTable, SiteConfig, SiteInput, SoilState, WaterBalance};
 
 /// Water-table forcing mode (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -154,9 +154,8 @@ impl WaterTableHydrology {
                 // Unsaturated row above z_wt: Gardner (1958) upward capillary flux
                 let z_bar = 0.5 * (z_r + z_next);
                 let dz_wt = (z_wt - z_bar).max(0.0);
-                let (a, b, n) = self.config.texture.gardner_params();
-                let denom = (dz_wt.powf(n) + b).max(1e-12);
-                let q_cap_max = (self.config.k_sat_mm_per_day.max(0.0) * a) / denom;
+                let q_cap_max =
+                    gardner_q_cap_max(self.config.texture, self.config.k_sat_mm_per_day, dz_wt);
                 let w_row: f64 = sl[base..base + 8].iter().sum();
                 let deficit = (row_awc_max - w_row).max(0.0);
                 let delta_w = (q_cap_max * dt_days.max(0.0)).min(deficit);
@@ -301,9 +300,8 @@ impl WaterTableHydrology {
             if z_next <= z_wt {
                 let z_bar = 0.5 * (z_r + z_next);
                 let dz_wt = (z_wt - z_bar).max(0.0);
-                let (a, b, n) = self.config.texture.gardner_params();
-                let denom = (dz_wt.powf(n) + b).max(1e-12);
-                let q_cap_max = (self.config.k_sat_mm_per_day * a) / denom;
+                let q_cap_max =
+                    gardner_q_cap_max(self.config.texture, self.config.k_sat_mm_per_day, dz_wt);
                 let base = r * 8;
                 let w_row: f64 = sl[base..base + 8].iter().sum();
                 let deficit = (row_awc_max - w_row).max(0.0);
@@ -317,6 +315,20 @@ impl WaterTableHydrology {
         }
         added
     }
+}
+
+/// Computes Gardner (1958) maximum upward capillary flux $q_{\text{cap,max}}$ ($\text{mm day}^{-1}$)
+/// for distance $\Delta z_{\text{wt}} \ge 0$ (m) using fast integer/sqrt powers matched on texture.
+#[inline]
+fn gardner_q_cap_max(texture: SoilTextureClass, k_sat_mm_per_day: f64, dz_wt: f64) -> f64 {
+    let (a, b, _) = texture.gardner_params();
+    let dz_pow = match texture {
+        SoilTextureClass::Coarse => dz_wt * dz_wt * dz_wt,
+        SoilTextureClass::Medium | SoilTextureClass::Organic => dz_wt * dz_wt * dz_wt.sqrt(),
+        SoilTextureClass::Fine => dz_wt * dz_wt,
+    };
+    let denom = (dz_pow + b).max(1e-12);
+    (k_sat_mm_per_day.max(0.0) * a) / denom
 }
 
 /// Distributes `delta_w` across a row's 8 columns from driest (`c = 7`) to wettest (`c = 0`),
@@ -395,7 +407,7 @@ impl HydrologyStep for WaterTableHydrology {
         let mut iday = [0_u8; 360];
         let mut nd = [0.0_f64; 3];
         let mut day_cursor = 0_usize;
-        let mut z_wt_daily = [f64::INFINITY; 360];
+        let mut z_wt_daily = HalfMonthlyWaterTable::default();
         let mut sat_days_mcs = 0_i32;
 
         for m in 0..12 {
@@ -403,7 +415,8 @@ impl HydrologyStep for WaterTableHydrology {
             let mpe_m = water_balance.mpe[m];
 
             for half in 0..2 {
-                let start_day = m * 30 + half * 15;
+                let hm_idx = m * 2 + half;
+                let start_day = hm_idx * 15;
                 if half == 1 {
                     storm_recharge(&mut sl, fsl, precip_m / 2.0);
                     k = inspect_mcs(&sl, k);
@@ -438,11 +451,9 @@ impl HydrologyStep for WaterTableHydrology {
                 };
 
                 self.apply_water_table(&mut sl, fsl, z_wt, 15.0);
-                for slot in &mut z_wt_daily[start_day..(start_day + 15)] {
-                    *slot = z_wt;
-                    if z_wt <= mcs_bot || z_wt < mcs_top {
-                        sat_days_mcs += 1;
-                    }
+                z_wt_daily.set_half_month(hm_idx, z_wt);
+                if z_wt <= mcs_bot || z_wt < mcs_top {
+                    sat_days_mcs += 15;
                 }
             }
         }
@@ -454,5 +465,38 @@ impl HydrologyStep for WaterTableHydrology {
             sat_days_mcs,
             z_wt_daily,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fast_gardner_powers_match_powf_within_1e_12() {
+        let textures = [
+            SoilTextureClass::Coarse,
+            SoilTextureClass::Medium,
+            SoilTextureClass::Fine,
+            SoilTextureClass::Organic,
+        ];
+        let dz_values = [
+            0.0, 0.01, 0.0625, 0.125, 0.25, 0.5, 1.0, 1.5, 2.5, 5.0, 10.0,
+        ];
+        let k_sat = 125.0;
+
+        for texture in textures {
+            let (a, b, n) = texture.gardner_params();
+            for dz_wt in dz_values {
+                let fast = gardner_q_cap_max(texture, k_sat, dz_wt);
+                let ref_val = (k_sat * a) / (dz_wt.powf(n) + b).max(1e-12);
+                let diff = (fast - ref_val).abs();
+                assert!(
+                    diff < 1e-12,
+                    "Mismatch for {texture:?} at dz={dz_wt}: fast={fast}, ref={ref_val}, diff={diff}"
+                );
+            }
+        }
+        assert_eq!(gardner_q_cap_max(SoilTextureClass::Medium, -5.0, 0.5), 0.0);
     }
 }

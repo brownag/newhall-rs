@@ -2,7 +2,7 @@
 //! matching `BASICSimulationModel.java` (`runSimulation(double[], ...)` / `v1.6.5`).
 
 use crate::traits::HydrologyStep;
-use crate::types::{SiteConfig, SiteInput, SoilState, WaterBalance};
+use crate::types::{HalfMonthlyWaterTable, SiteConfig, SiteInput, SoilState, WaterBalance};
 
 /// 0-indexed depletion order across the 8×8 soil moisture matrix
 /// (transcribed from `BASICSimulationModelConstants.dp[0..64]`, converting `1..=64` to `0..64`
@@ -100,7 +100,7 @@ impl HydrologyStep for ClassicHydrology {
             iday,
             nd,
             sat_days_mcs: 0,
-            z_wt_daily: [f64::INFINITY; 360],
+            z_wt_daily: HalfMonthlyWaterTable::default(),
         }
     }
 }
