@@ -1,16 +1,18 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-24
-Source State: STATE_6.md (Magic Wand pass 2 — release, CI, packaging, and validation horizon)
+Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root docs, crates.io readiness)
 
 ## Circled Goal (Active)
 
-- **[G19]** Automated CI/CD pipeline (`.github/workflows/ci.yml`) enforces Rust tests/clippy/fmt, `newhall-core` sync parity, and R `testthat` + `R CMD check` on every push and PR.
-  - Why now: Highest unblocking leverage — every downstream goal (`G20`–`G28`) touches Rust, `r-pkg`, or both; automating verification and `sync-core.sh` drift detection prevents silent regressions across all future waves.
-  - Exit criteria: `.github/workflows/ci.yml` is valid YAML and every CI command (Rust workspace checks, `sync-core.sh --check` drift check, and R `R CMD check` / `testthat`) passes cleanly locally.
-  - First action: Add `--check` drift verification to `r-pkg/tools/sync-core.sh` and scaffold `.github/workflows/ci.yml`.
+- None (ready for next Magic Wand pass: `G22`, `G23`, `G24`, `G26`, `G28`).
 
 ## Completed Goals
+
+- **[G19]** Automated CI/CD pipeline (`.github/workflows/ci.yml`) and `r-pkg/tools/sync-core.sh --check` drift verification (`STATE_7.md`, `95c0d50`).
+- **[G20]** `r-pkg` `Makevars` `.PHONY: $(STATLIB)` Rust tracking, `Makevars.win`, `DESCRIPTION`/`LICENSE` metadata, and `R CMD check --as-cran` / `testthat` verification (`STATE_7.md`, `e3cb07b`, `a95f33e`; upstream `extendr-api 0.8.2` / R 4.6.2 compiled-code warning noted).
+- **[G21]** Root `README.md`, MIT `LICENSE`, and `CHANGELOG.md` covering Rust/R quickstarts, model modes, and benchmark highlights (`STATE_7.md`, `91dd2a8`).
+- **[G25]** `newhall-core` crates.io metadata, `#![warn(missing_docs)]` with full rustdoc coverage, and passing `--no-default-features` + `cargo package --list` (`STATE_7.md`, `09c0f79`).
 
 - **[G16]** Fast integer/sqrt powers in Gardner capillary rise (`water_table.rs`), lean `SoilState` via `HalfMonthlyWaterTable([f64; 24])` (`types.rs`, shrunk from 3,784 B to 1,096 B), and direct R vector allocation (`Doubles`/`Integers`) in `r-pkg` `outputs_to_r_list()` (`STATE_6.md`, `25c3c0d`, `6d9242c`, `1297b50`).
 - **[G5]** `newhall-cli` implements `run` (CSV batch), `verify` (golden-master parity on PA/PRISM/Daymet), and `bench` (`4.7M–5.0M sims/sec` multi-core `ClassicNewhall`, >47× above the 100k target) (`STATE_6.md`, `763dd5e`).
@@ -33,12 +35,6 @@ Source State: STATE_6.md (Magic Wand pass 2 — release, CI, packaging, and vali
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G20]** `r-pkg` passes `R CMD check --as-cran` cleanly with zero errors, warnings, or notes, `Makevars` Rust source prerequisites, `Makevars.win`/CRAN vendoring hygiene, and real maintainer metadata in `DESCRIPTION`.
-  - Depends on: G19
-- **[G21]** Root `README.md`, `LICENSE` (MIT), and `CHANGELOG.md` document Rust (`newhall-core`, `newhall-cli`) and R (`newhallrs`) quickstarts, classic vs. strict vs. Phase 4 modes, and benchmark highlights.
-  - Depends on: G19
-- **[G25]** `newhall-core` is crates.io-ready with complete rustdoc (`#![warn(missing_docs)]`), crate metadata (`repository`, `readme`, `keywords`, `categories`), and passing `cargo test --no-default-features` + `cargo package --list`.
-  - Depends on: G19, G21
 - **[G22]** User-facing R vignette(s) in `r-pkg/vignettes/` demonstrate tabular, `terra::SpatRaster`, strict-mode, and Phase 4 workflows and build cleanly under `R CMD build`.
   - Depends on: G20
 - **[G24]** `newhall_batch_phase4.character` (CSV/path method) completes full S3 parity with `newhall_batch` (`default`, `data.frame`, `character`, `SpatRaster`), with testthat coverage.

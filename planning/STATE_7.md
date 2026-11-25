@@ -17,7 +17,7 @@ Last Updated: 2026-11-24
 | 1 | `7.1.2` | Create root `README.md`, `LICENSE`, and `CHANGELOG.md` (`G21`) | done | flash | `91dd2a8` |
 | 1 | `7.1.3` | `r-pkg` `Makevars` Rust tracking, `Makevars.win`, and `DESCRIPTION`/`LICENSE` metadata (`G20`) | done | flash | `e3cb07b` |
 | 2 | `7.2.1` | `newhall-core` crates.io metadata, `#![warn(missing_docs)]`, and `--no-default-features` (`G25`) | done | flash | `09c0f79` |
-| 3 | `7.3.1` | Sync `newhall-core` to `r-pkg`, run full Rust + `R CMD check --as-cran` + `testthat` gate | in_progress | flash | — |
+| 3 | `7.3.1` | Sync `newhall-core` to `r-pkg`, run full Rust + `R CMD check --as-cran` + `testthat` gate | done | flash | `a95f33e` |
 
 ## Task Reports
 
@@ -46,3 +46,16 @@ Last Updated: 2026-11-24
 - **files:** updated `crates/newhall-core/Cargo.toml` (+6), `src/{lib,traits,engine,thermal_1d,water_table,types}.rs` (+109 rustdoc lines).
 - **verification:** `cargo fmt --check`, `cargo clippy -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc -p newhall-core --no-deps`, `cargo test --workspace --all-targets` (`76` PASS), `cargo test -p newhall-core --no-default-features` (`70` PASS), `cargo package -p newhall-core --list --allow-dirty` (21 files) all PASS.
 - **gotchas:** `r-pkg/src/rust/newhall-core/` is out of sync until `7.3.1` runs `r-pkg/tools/sync-core.sh`.
+
+### 7.3.1
+- **status:** done (with upstream `extendr-api` / R 4.6.2 compiled-code warning noted) | **commit:** `a95f33e`
+- **files:** synced `r-pkg/src/rust/newhall-core/{Cargo.toml,src/*.rs}` (7 files, +115/-0).
+- **verification:**
+  - `bash r-pkg/tools/sync-core.sh --check`: PASS
+  - `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`: PASS
+  - `cargo test --workspace --all-targets`: PASS (`76` passed)
+  - `cargo test -p newhall-core --no-default-features`: PASS (`70` passed)
+  - `devtools::test('r-pkg')`: PASS (`217` PASS, `0` FAIL, `0` WARN, `0` SKIP)
+  - `R CMD check --as-cran --no-manual`: exit 0 (`0` ERROR, `1` WARNING, `1` NOTE)
+    - WARNING (`checking compiled code`): upstream `libnewhallrs.a` Rust `std` (`_exit`/`abort`/`exit`) and `extendr-api 0.8.2` (`R_NamespaceRegistry`) on R 4.6.2.
+    - NOTE (`CRAN incoming feasibility`): new submission, optional `Suggests` `jNSMR` not in mainstream repos, GitHub URL 404 prior to push.
