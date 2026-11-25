@@ -1,14 +1,14 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-23
-Source State: STATE_3.md (G18 strict-mode remediation completed)
+Last Updated: 2026-11-24
+Source State: STATE_4.md (G7 R S3 & SpatRaster API completed)
 
 ## Circled Goal (Active)
 
-- **[G7]** `r-pkg/R/` mirrors `jNSMR`'s user-facing API for `data.frame` and `terra::SpatRaster` inputs using chunked `readStart()`/`readValues()`/`writeValues()` and `terra::set.cats()`, supporting both `jNSMR`-parity default mode and opt-in `strict` / Phase 4 modes.
-  - Why now: Directly unblocks `G8` (`R CMD check`, end-to-end `jNSMR` parity tests, and raster speedup benchmark) and turns `r-pkg` into a usable drop-in replacement for `jNSMR`.
-  - Exit criteria: `data.frame` and `terra::SpatRaster` entry points accept `jNSMR`-compatible arguments, handle `NA` cells and multi-block chunked I/O, apply `terra::set.cats()`, and pass `devtools::test('r-pkg')` across classic, strict, and Phase 4 paths.
-  - First action: Inspect `jNSMR`'s user-facing R API signatures and categorical level tables in `planning/AUDIT_JNSM.md` and compare against `r-pkg/R/newhall.R`.
+- **[G8]** `R CMD check` passes cleanly on `r-pkg`, `testthat` verifies end-to-end parity with `jNSMR` on sample tabular and raster datasets, and a reproducible benchmark reports speedup over `jNSMR` on the sample raster dataset.
+  - Why now: All prerequisites (`G2`, `G4`, `G7`) are complete; validates `r-pkg` as a release-quality drop-in `jNSMR` replacement and locks in a reproducible R speedup baseline before `G16` optimizations.
+  - Exit criteria: `devtools::check('r-pkg')` exits 0 with 0 errors and 0 warnings; `devtools::test('r-pkg')` verifies sample-raster parity with `jNSMR` (`<= 1e-9` float tolerance, 100% exact categorical match); benchmark script reports wall-clock speedup over `jNSMR`.
+  - First action: Run `Rscript -e "devtools::check('r-pkg')"` and inspect the sample raster dataset in `/home/andrew/workspace/jNSMR` to inventory `R CMD check` findings and parity fixture inputs.
 
 ## Completed Goals
 
@@ -24,16 +24,16 @@ Source State: STATE_3.md (G18 strict-mode remediation completed)
 - **[G15]** Coarse-to-fine thermal spin-up equilibrates deep nodes in 36 monthly steps before 1–2 daily refinement years.
 - **[G17]** Phase 4 batch throughput reaches `10,161 sims/sec` (`> 10,000 sims/sec` target, `9.0x` speedup over `1,125 sims/sec` baseline).
 - **[G18]** Opt-in `StrictThornthwaiteForcing`, `StrictThermal`, `StrictHydrology`, and `StrictNewhall` remediate the applicable audited `jNSMR` defects (`#1`–`#10`) while preserving `ClassicNewhall` parity, with `strict`/`strict_forcing` exposed in `r-pkg` (`STATE_3.md`).
+- **[G7]** `r-pkg/R/` mirrors `jNSMR`'s user-facing S3 API (`default`, `data.frame`, `character`, chunked `terra::SpatRaster` with `terra::set.cats()`) and per-site soil config FFI (`STATE_4.md`).
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G8]** `R CMD check` passes cleanly, `testthat` verifies parity with `jNSMR`, and a benchmark reports speedup over `jNSMR` on the sample raster dataset.
-  - Depends on: G2, G4, G7
+- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
+  - Depends on: G8
 
 ## Independent Backlog
 
 - **[G5]** `newhall-cli` runs CSV/batch simulations and golden-master verification and benchmarks multi-core throughput against the 100,000+ simulations/sec target.
-- **[G16]** Fast integer/sqrt powers in Gardner capillary rise, lean `SoilState` without unconditional `[f64; 360]` copy, and direct R vector allocation in `r-pkg`.
 - **[G10]** `ARCHITECTURE.md` documents how to implement, test, and register new physics models in `newhall-core`.
 
 ## Deferred
