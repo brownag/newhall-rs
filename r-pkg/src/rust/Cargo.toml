@@ -10,6 +10,6 @@ crate-type = ["staticlib"]
 name = "newhallrs"
 
 [dependencies]
-extendr-api = "0.7"
+extendr-api = "0.8"
 newhall-core = { path = "newhall-core" }
 rayon = "1"
