@@ -94,8 +94,6 @@ jobs:
         run: R CMD build r-pkg
 
       - name: Check R source package
-        env:
-          _R_CHECK_FORCE_SUGGESTS_: "false"
         run: R CMD check --no-manual newhallrs_*.tar.gz
 
       - name: Run testthat suite

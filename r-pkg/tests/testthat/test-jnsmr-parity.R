@@ -1,5 +1,6 @@
 expect_spatraster_jnsmr_parity <- function(extdata_rel_path) {
-  skip_if_not_installed("jNSMR")
+  skip_on_cran()
+  skip_if_not(requireNamespace("jNSMR", quietly = TRUE), "jNSMR not installed")
   skip_if_not_installed("terra")
 
   tif_path <- system.file(extdata_rel_path, package = "jNSMR")
@@ -7,7 +8,7 @@ expect_spatraster_jnsmr_parity <- function(extdata_rel_path) {
 
   r <- terra::rast(tif_path)
   actual <- newhallrs::newhall_batch(r)
-  expected <- jNSMR::newhall_batch(r)
+  expected <- getExportedValue("jNSMR", "newhall_batch")(r)
 
   expect_s4_class(actual, "SpatRaster")
   expect_equal(terra::nlyr(actual), 19L)
@@ -45,7 +46,8 @@ expect_spatraster_jnsmr_parity <- function(extdata_rel_path) {
 }
 
 test_that("newhall_batch CSV output matches jNSMR across all 19 columns", {
-  skip_if_not_installed("jNSMR")
+  skip_on_cran()
+  skip_if_not(requireNamespace("jNSMR", quietly = TRUE), "jNSMR not installed")
   skip_if_not_installed("terra")
 
   csv_path <- system.file(
@@ -55,7 +57,7 @@ test_that("newhall_batch CSV output matches jNSMR across all 19 columns", {
   expect_true(nzchar(csv_path) && file.exists(csv_path))
 
   actual <- newhallrs::newhall_batch(csv_path)
-  expected <- jNSMR::newhall_batch(csv_path)
+  expected <- getExportedValue("jNSMR", "newhall_batch")(csv_path)
 
   expect_s3_class(actual, "data.frame")
   expect_identical(dim(actual), dim(expected))
