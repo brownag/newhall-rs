@@ -3,11 +3,13 @@ name = "newhallrs"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [lib]
 crate-type = ["staticlib"]
 name = "newhallrs"
 
 [dependencies]
 extendr-api = "0.7"
-newhall-core = { path = "../../../crates/newhall-core" }
+newhall-core = { path = "newhall-core" }
 rayon = "1"

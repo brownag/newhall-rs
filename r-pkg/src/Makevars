@@ -7,14 +7,12 @@ all: $(SHLIB)
 
 $(SHLIB): $(STATLIB)
 
-CARGOTMP = $(CURDIR)/.cargo
-
 $(STATLIB):
-	mkdir -p $(TARGET_DIR) && mkdir -p $(CARGOTMP)
+	mkdir -p $(TARGET_DIR)
 	PATH="$(PATH):$(HOME)/.cargo/bin" cargo build --lib --release --manifest-path=./rust/Cargo.toml --target-dir $(TARGET_DIR)
 
 C_clean:
 	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS)
 
 clean:
-	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(TARGET_DIR)
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(TARGET_DIR) ./.cargo

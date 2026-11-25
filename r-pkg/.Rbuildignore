@@ -1,0 +1,8 @@
+^src/rust/target$
+^src/\.cargo$
+^src/.*\.o$
+^src/.*\.so$
+^src/.*\.dll$
+^tools$
+^\.Rproj\.user$
+^.*\.Rproj$
