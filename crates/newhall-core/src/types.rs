@@ -4,7 +4,9 @@
 /// Geographic hemisphere derived from latitude (`lat_dd >= 0.0` => North).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Hemisphere {
+    /// Northern hemisphere (`lat_dd >= 0.0`).
     North,
+    /// Southern hemisphere (`lat_dd < 0.0`).
     South,
 }
 
@@ -12,15 +14,25 @@ pub enum Hemisphere {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TemperatureRegime {
+    /// Mean annual soil temperature (MAST) < 0 °C.
     Pergelic = 0,
+    /// MAST in `[0, 8)` °C with cool summer temperatures (non-iso).
     Cryic = 1,
+    /// MAST < 8 °C and warmer in summer than Cryic (non-iso).
     Frigid = 2,
+    /// MAST in `[8, 15)` °C (non-iso).
     Mesic = 3,
+    /// MAST in `[15, 22)` °C (non-iso).
     Thermic = 4,
+    /// MAST >= 22 °C (non-iso).
     Hyperthermic = 5,
+    /// MAST < 8 °C with < 6 °C difference between mean summer and winter soil temperatures.
     Isofrigid = 6,
+    /// MAST in `[8, 15)` °C with < 6 °C seasonal amplitude.
     Isomesic = 7,
+    /// MAST in `[15, 22)` °C with < 6 °C seasonal amplitude.
     Isothermic = 8,
+    /// MAST >= 22 °C with < 6 °C seasonal amplitude.
     Isohyperthermic = 9,
 }
 
@@ -68,11 +80,17 @@ impl TemperatureRegime {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MoistureRegime {
+    /// Aridic / Torric moisture regime.
     Aridic = 0,
+    /// Ustic moisture regime.
     Ustic = 1,
+    /// Xeric moisture regime.
     Xeric = 2,
+    /// Udic moisture regime.
     Udic = 3,
+    /// Perudic moisture regime.
     Perudic = 4,
+    /// Undefined moisture regime (e.g., Pergelic/Cryic thermal bounds or invalid input).
     Undefined = 5,
 }
 
@@ -112,14 +130,23 @@ impl MoistureRegime {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RegimeSubdivision1 {
+    /// Typic subdivision.
     Typic = 0,
+    /// Weak subdivision (e.g., Weak Aridic).
     Weak = 1,
+    /// Wet subdivision (e.g., Wet Tempustic / Tropustic).
     Wet = 2,
+    /// Dry subdivision (e.g., Dry Xeric / Udic / Tempustic).
     Dry = 3,
+    /// Extreme subdivision (e.g., Extreme Aridic).
     Extreme = 4,
+    /// Xeric intergrade subdivision.
     Xeric = 5,
+    /// Udic intergrade subdivision.
     Udic = 6,
+    /// Aridic intergrade subdivision.
     Aridic = 7,
+    /// Undefined subdivision (`" "` in classic Java output).
     Undefined = 8,
 }
 
@@ -175,13 +202,21 @@ impl RegimeSubdivision1 {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RegimeSubdivision2 {
+    /// Aridic subdivision group.
     Aridic = 0,
+    /// Tempustic subdivision group.
     Tempustic = 1,
+    /// Tropustic subdivision group.
     Tropustic = 2,
+    /// Tempudic subdivision group.
     Tempudic = 3,
+    /// Xeric subdivision group.
     Xeric = 4,
+    /// Udic subdivision group.
     Udic = 5,
+    /// Tropudic subdivision group.
     Tropudic = 6,
+    /// Undefined subdivision group.
     Undefined = 7,
 }
 
@@ -227,7 +262,9 @@ impl RegimeSubdivision2 {
 /// Per-site climate and soil input parameters (stack-allocated, `Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SiteInput {
+    /// Site latitude in decimal degrees (`>= 0.0` is Northern hemisphere).
     pub lat_dd: f64,
+    /// Site longitude in decimal degrees.
     pub lon_dd: f64,
     /// Monthly mean air temperature (°C), Jan..Dec (`[0..12]`).
     pub temp_c: [f64; 12],
@@ -346,9 +383,13 @@ impl Default for SoilState {
 pub struct WaterBalance {
     /// Adjusted monthly potential evapotranspiration (`mpe`, mm), Jan..Dec (`[0..12]`).
     pub mpe: [f64; 12],
+    /// Total annual precipitation (mm).
     pub annual_rainfall: f64,
+    /// Total annual potential evapotranspiration (mm).
     pub annual_pet: f64,
+    /// Annual precipitation minus annual PET (mm).
     pub annual_water_balance: f64,
+    /// Summer-quarter precipitation minus summer-quarter PET (mm).
     pub summer_water_balance: f64,
 }
 
@@ -367,25 +408,40 @@ impl Default for WaterBalance {
 /// All 10 integer day-counter outputs produced by the simulation (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DayCounters {
+    /// Consecutive days dry in the moisture control section (MCS) following the summer solstice.
     pub dry_days_after_summer_solstice: i32,
+    /// Consecutive days moist in the MCS following the winter solstice.
     pub moist_days_after_winter_solstice: i32,
+    /// Cumulative days the MCS is completely dry.
     pub num_cumulative_days_dry: i32,
+    /// Cumulative days the MCS is partly moist and partly dry.
     pub num_cumulative_days_moist_dry: i32,
+    /// Cumulative days the MCS is completely moist.
     pub num_cumulative_days_moist: i32,
+    /// Cumulative days the MCS is dry while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_dry_over_5c: i32,
+    /// Cumulative days the MCS is moist/dry while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_moist_dry_over_5c: i32,
+    /// Cumulative days the MCS is moist while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_moist_over_5c: i32,
+    /// Maximum consecutive days the MCS is moist in some part.
     pub num_consecutive_days_moist_in_some_parts: i32,
+    /// Maximum consecutive days the MCS is moist in some part while soil temperature at 50 cm exceeds 8 °C.
     pub num_consecutive_days_moist_in_some_parts_over_8c: i32,
 }
 
 /// Output from [`crate::traits::ThermalModel::evaluate`] (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThermalClassification {
+    /// Integer day counters evaluated over the 360-day year.
     pub day_counters: DayCounters,
+    /// Classified soil temperature regime (`None` when input temperatures contain `NaN`).
     pub temperature_regime: Option<TemperatureRegime>,
+    /// Classified soil moisture regime.
     pub moisture_regime: MoistureRegime,
+    /// First-level moisture regime subdivision.
     pub regime_subdivision1: RegimeSubdivision1,
+    /// Second-level moisture regime subdivision.
     pub regime_subdivision2: RegimeSubdivision2,
     /// Consecutive days with `z_wt <= 0.50 m` and `T(0.50 m) > 5.0 °C` (`0` in classic mode).
     pub aquic_bio_days: i32,
@@ -394,25 +450,43 @@ pub struct ThermalClassification {
 /// Complete simulation output matching `jNSMR::batch3()` plus Phase 4 diagnostics (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SiteOutput {
+    /// Total annual precipitation (mm).
     pub annual_rainfall: f64,
+    /// Soil available water capacity (mm).
     pub water_holding_capacity: f64,
+    /// Annual precipitation minus annual PET (mm).
     pub annual_water_balance: f64,
+    /// Total annual potential evapotranspiration (mm).
     pub annual_potential_evapotranspiration: f64,
+    /// Summer-quarter precipitation minus summer-quarter PET (mm).
     pub summer_water_balance: f64,
+    /// Consecutive days dry in the MCS following the summer solstice.
     pub dry_days_after_summer_solstice: i32,
+    /// Consecutive days moist in the MCS following the winter solstice.
     pub moist_days_after_winter_solstice: i32,
+    /// Cumulative days the MCS is completely dry.
     pub num_cumulative_days_dry: i32,
+    /// Cumulative days the MCS is partly moist and partly dry.
     pub num_cumulative_days_moist_dry: i32,
+    /// Cumulative days the MCS is completely moist.
     pub num_cumulative_days_moist: i32,
+    /// Cumulative days the MCS is dry while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_dry_over_5c: i32,
+    /// Cumulative days the MCS is moist/dry while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_moist_dry_over_5c: i32,
+    /// Cumulative days the MCS is moist while soil temperature at 50 cm exceeds 5 °C.
     pub num_cumulative_days_moist_over_5c: i32,
+    /// Maximum consecutive days the MCS is moist in some part.
     pub num_consecutive_days_moist_in_some_parts: i32,
+    /// Maximum consecutive days the MCS is moist in some part while soil temperature at 50 cm exceeds 8 °C.
     pub num_consecutive_days_moist_in_some_parts_over_8c: i32,
     /// `None` represents Java `""` / R `NA` when temperature contains `NaN`.
     pub temperature_regime: Option<TemperatureRegime>,
+    /// Classified soil moisture regime.
     pub moisture_regime: MoistureRegime,
+    /// First-level moisture regime subdivision.
     pub regime_subdivision1: RegimeSubdivision1,
+    /// Second-level moisture regime subdivision.
     pub regime_subdivision2: RegimeSubdivision2,
     /// Cumulative days where water table is within the MCS (`0` in classic mode).
     pub sat_days_mcs: i32,
