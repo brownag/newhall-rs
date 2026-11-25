@@ -278,6 +278,42 @@ impl Default for SiteConfig {
     }
 }
 
+/// Compact half-monthly water-table depth profile (24 half-months × 15 days = 360 days, `Copy`).
+///
+/// Indexed by simulation day `0..360` (`day / 15`) to eliminate unconditional `[f64; 360]`
+/// stack copies while preserving exact meter depths per half-month.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HalfMonthlyWaterTable(pub [f64; 24]);
+
+impl HalfMonthlyWaterTable {
+    /// Returns the 24 half-monthly water-table depths (m, positive downward).
+    #[inline]
+    pub const fn as_half_months(&self) -> &[f64; 24] {
+        &self.0
+    }
+
+    /// Sets the water-table depth (m) for half-month `hm_idx` (`0..24`).
+    #[inline]
+    pub fn set_half_month(&mut self, hm_idx: usize, z_wt_m: f64) {
+        self.0[hm_idx] = z_wt_m;
+    }
+}
+
+impl Default for HalfMonthlyWaterTable {
+    fn default() -> Self {
+        Self([f64::INFINITY; 24])
+    }
+}
+
+impl std::ops::Index<usize> for HalfMonthlyWaterTable {
+    type Output = f64;
+
+    #[inline]
+    fn index(&self, day: usize) -> &Self::Output {
+        &self.0[day / 15]
+    }
+}
+
 /// Stack-allocated 8×8 soil moisture state and 360-day calendar (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SoilState {
@@ -289,8 +325,8 @@ pub struct SoilState {
     pub nd: [f64; 3],
     /// Cumulative days where water table is within the Moisture Control Section (`0` in classic mode).
     pub sat_days_mcs: i32,
-    /// Daily water-table depth (m, positive downward; `f64::INFINITY` when absent).
-    pub z_wt_daily: [f64; 360],
+    /// Half-monthly water-table depth profile (m, positive downward; `f64::INFINITY` when absent).
+    pub z_wt_daily: HalfMonthlyWaterTable,
 }
 
 impl Default for SoilState {
@@ -300,7 +336,7 @@ impl Default for SoilState {
             iday: [0; 360],
             nd: [0.0; 3],
             sat_days_mcs: 0,
-            z_wt_daily: [f64::INFINITY; 360],
+            z_wt_daily: HalfMonthlyWaterTable::default(),
         }
     }
 }
@@ -434,11 +470,31 @@ mod tests {
         assert_copy::<RegimeSubdivision2>();
         assert_copy::<SiteInput>();
         assert_copy::<SiteConfig>();
+        assert_copy::<HalfMonthlyWaterTable>();
         assert_copy::<SoilState>();
         assert_copy::<WaterBalance>();
         assert_copy::<DayCounters>();
         assert_copy::<ThermalClassification>();
         assert_copy::<SiteOutput>();
+    }
+
+    #[test]
+    fn soil_state_is_lean_and_indexes_by_half_month() {
+        assert!(
+            std::mem::size_of::<SoilState>() <= 1120,
+            "SoilState unexpectedly large: {} bytes",
+            std::mem::size_of::<SoilState>()
+        );
+        let mut wt = HalfMonthlyWaterTable::default();
+        for d in 0..360 {
+            assert_eq!(wt[d], f64::INFINITY);
+        }
+        for hm in 0..24 {
+            wt.set_half_month(hm, (hm as f64) * 0.1);
+        }
+        for d in 0..360 {
+            assert_eq!(wt[d], ((d / 15) as f64) * 0.1);
+        }
     }
 
     #[test]
