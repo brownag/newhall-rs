@@ -39,10 +39,14 @@ const SECONDS_PER_DAY: f64 = 86_400.0;
 /// Soil texture class governing Kersten number $\kappa$ and Gardner (1958) capillary parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SoilTextureClass {
+    /// Coarse-textured mineral soil (sands and loamy sands).
     Coarse,
+    /// Medium-textured mineral soil (loams and silt loams).
     #[default]
     Medium,
+    /// Fine-textured mineral soil (clays and clay loams).
     Fine,
+    /// Organic-rich soil (histosols / peat).
     Organic,
 }
 
@@ -149,12 +153,19 @@ impl Default for SoilThermalState {
 /// Material parameters for a single 1D thermal node (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NodeMaterial {
+    /// Soil porosity $\phi \in [0, 1]$.
     pub porosity: f64,
+    /// Dry bulk density $\rho_b$ ($\text{kg m}^{-3}$).
     pub bulk_density_kg_m3: f64,
+    /// Quartz volume fraction of mineral solids $q \in [0, 1]$.
     pub quartz_fraction: f64,
+    /// Organic matter volume fraction $f_{\text{om}} \in [0, 1]$.
     pub organic_fraction: f64,
+    /// Total volumetric water + ice content $\theta_{\text{tot}}$ ($\text{m}^3\text{ m}^{-3}$).
     pub theta_tot: f64,
+    /// Côté & Konrad (2005) Kersten parameter $\kappa$.
     pub kappa: f64,
+    /// Whether this node represents a surface organic O-horizon.
     pub is_o_horizon: bool,
     /// Optional direct override `(c_v, lambda)` for analytical benchmarks (no phase change).
     pub uniform_override: Option<(f64, f64)>,
@@ -723,6 +734,7 @@ pub fn interp_monthly_to_day(monthly: &[f64; 12], day: usize) -> f64 {
 /// 1D coupled soil thermal model implementing [`ThermalModel`] with zero heap allocations.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Thermal1DModel {
+    /// Configuration parameters for the 1D soil thermal solver.
     pub config: Thermal1DConfig,
 }
 

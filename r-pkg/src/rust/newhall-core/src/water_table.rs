@@ -15,14 +15,20 @@ pub enum WaterTableMode {
     PrescribedMonthly([f64; 12]),
     /// Prescribed seasonal harmonic $z_{\text{wt}}(t) = \bar{z} - A \cos(2\pi (t - t_{\text{peak}})/365)$.
     PrescribedHarmonic {
+        /// Annual mean water-table depth $\bar{z}$ (m, positive downward).
         mean_depth_m: f64,
+        /// Seasonal water-table depth amplitude $A$ (m).
         amplitude_m: f64,
+        /// Day of year of shallowest water table $t_{\text{peak}}$ (`0..360`).
         peak_day: f64,
     },
     /// Prognostic perched water table above an impermeable layer $z_{\text{imp}}$.
     Prognostic {
+        /// Depth to the impermeable layer $z_{\text{imp}}$ (m, positive downward).
         z_imp_m: f64,
+        /// Drainable specific yield $S_y$ ($\text{m}^3\text{ m}^{-3}$).
         sy: f64,
+        /// Lateral drainage recession rate $k_{\text{lat}}$ ($\text{day}^{-1}$).
         k_lat_per_day: f64,
     },
 }
@@ -40,6 +46,7 @@ impl Default for WaterTableMode {
 /// Configuration for [`WaterTableHydrology`] (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WaterTableConfig {
+    /// Water-table boundary forcing mode.
     pub mode: WaterTableMode,
     /// Total rooting / profile depth $Z_{\text{prof}}$ (m; default `1.0`).
     pub z_prof_m: f64,
@@ -75,17 +82,24 @@ pub struct WaterTableState {
 /// Mass-balance diagnostic for a single prognostic water-table step (mm).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct StepMassBalance {
+    /// Change in 8×8 soil matrix moisture storage (mm).
     pub delta_s_matrix_mm: f64,
+    /// Change in perched water-table storage $S_y \Delta h_{\text{wt}}$ (mm).
     pub sy_delta_h_mm: f64,
+    /// Precipitation input during the step (mm).
     pub precip_mm: f64,
+    /// Actual evapotranspiration during the step (mm).
     pub aet_mm: f64,
+    /// Lateral drainage outflow from the perched water table (mm).
     pub q_lat_mm: f64,
+    /// Surface runoff / saturation excess during the step (mm).
     pub r_surf_mm: f64,
 }
 
 /// Fluctuating water-table hydrology model implementing [`HydrologyStep`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WaterTableHydrology {
+    /// Configuration parameters for water-table forcing and capillary rise.
     pub config: WaterTableConfig,
 }
 

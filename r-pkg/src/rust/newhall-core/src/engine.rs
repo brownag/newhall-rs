@@ -44,13 +44,17 @@ pub type StrictNewhall = SimEngine<StrictThermal, StrictThornthwaiteForcing, Str
 /// `awc_mm`, and `elev_m`) must have identical length `n`.
 #[derive(Debug, Clone, Copy)]
 pub struct SoaBatchInput<'a> {
+    /// Site latitudes in decimal degrees.
     pub lat_dd: &'a [f64],
+    /// Site longitudes in decimal degrees.
     pub lon_dd: &'a [f64],
     /// Monthly mean air temperature slices (°C), Jan..Dec (`[0..12]`).
     pub temp_c: [&'a [f64]; 12],
     /// Monthly precipitation slices (mm), Jan..Dec (`[0..12]`).
     pub precip_mm: [&'a [f64]; 12],
+    /// Available water capacity slices (mm).
     pub awc_mm: &'a [f64],
+    /// Site elevation slices (m).
     pub elev_m: &'a [f64],
 }
 

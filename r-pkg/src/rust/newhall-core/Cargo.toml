@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "Pure-Rust Newhall Simulation Model core engine and physics traits"
 license = "MIT"
+authors = ["Andrew Gene Brown <brown.andrewg@gmail.com>"]
+repository = "https://github.com/brownag/newhall-rs"
+homepage = "https://github.com/brownag/newhall-rs"
+readme = "../../README.md"
+keywords = ["soil", "hydrology", "climate", "newhall", "simulation"]
+categories = ["science", "simulation"]
 
 [features]
 default = ["parallel"]

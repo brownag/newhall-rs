@@ -34,8 +34,11 @@ pub trait ThermalModel {
 /// Static-dispatch Newhall simulation engine composing thermal, forcing, and hydrology models.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SimEngine<T, F, H> {
+    /// Soil thermal regime and growing-season day-counter model.
     pub thermal: T,
+    /// Atmospheric forcing and potential evapotranspiration (PET) model.
     pub forcing: F,
+    /// Soil water balance and moisture control section (MCS) hydrology model.
     pub hydrology: H,
 }
 

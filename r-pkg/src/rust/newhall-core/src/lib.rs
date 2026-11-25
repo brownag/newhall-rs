@@ -1,5 +1,7 @@
 //! Pure-Rust Newhall Simulation Model (`newhall-core`).
 
+#![warn(missing_docs)]
+
 pub mod engine;
 pub mod forcing;
 pub mod hydrology;
