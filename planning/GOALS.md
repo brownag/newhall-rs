@@ -5,7 +5,14 @@ Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root
 
 ## Circled Goal (Active)
 
-- None (ready for next Magic Wand pass: `G22`, `G23`, `G24`, `G26`, `G28`).
+- **[G29]** `r-pkg` removes `jNSMR` from `DESCRIPTION` `Suggests` and gates live `jNSMR` parity checks cleanly so `R CMD check --as-cran` has zero non-CRAN `Suggests` or unstated-dependency notes while local `jNSMR` parity remains runnable.
+  - Why now: Removes the `Suggests not in mainstream repositories: jNSMR` NOTE and eliminates the `_R_CHECK_FORCE_SUGGESTS_=false` CI workaround before any downstream R package work (`G22`, `G24`, `G28`).
+  - Exit criteria: `jNSMR` is absent from `r-pkg/DESCRIPTION`; `R CMD check --as-cran --no-manual` reports no `Suggests` or `unstated dependencies in 'tests'` notes; local `jNSMR` parity verification still passes when `jNSMR` is installed.
+  - First action: Inspect `r-pkg/tests/testthat/test-jnsmr-parity.R` and decide between gated dynamic lookup vs. moving to `scripts/`.
+- **[G30]** `r-pkg` investigates and remediates the `R CMD check --as-cran` `checking compiled code` WARNING (`R_NamespaceRegistry` non-API call and `_exit`/`abort`/`exit` symbols in `libnewhallrs.a`).
+  - Why now: Sole remaining WARNING blocking a 0-ERROR / 0-WARNING `R CMD check --as-cran` gate before public release (`G28`).
+  - Exit criteria: `R CMD check --as-cran --no-manual` reports 0 WARNINGs on `checking compiled code` (or documents exact upstream `extendr-api` / Rust `std` blocker with remediation path).
+  - First action: Inspect `nm -u` on `libnewhallrs.a` and check `extendr-api` version/features for `R_NamespaceRegistry` and `panic`/`exit` symbols.
 
 ## Completed Goals
 
