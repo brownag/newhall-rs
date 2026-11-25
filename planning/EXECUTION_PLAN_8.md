@@ -5,7 +5,7 @@
 ### Goal
 Eliminate the `Suggests not in mainstream repositories: jNSMR` NOTE and investigate/remediate the `checking compiled code` WARNING (`R_NamespaceRegistry`, `_exit`/`abort`/`exit`) in `R CMD check --as-cran --no-manual`:
 1. **`G29` (Wave 1):** Remove `jNSMR` from `r-pkg/DESCRIPTION` `Suggests`, gate `r-pkg/tests/testthat/test-jnsmr-parity.R` with `skip_on_cran()`, `skip_if_not(requireNamespace("jNSMR", quietly = TRUE))`, and `getExportedValue("jNSMR", "newhall_batch")` so `R CMD check` reports zero unstated-dependency or non-CRAN `Suggests` notes, and remove the `_R_CHECK_FORCE_SUGGESTS_: "false"` workaround from `.github/workflows/ci.yml`.
-2. **`G30` (Wave 1, parallel):** Investigate `extendr-api` upgrade/features for `R_NamespaceRegistry` and configure `[profile.release]` (`lto = true`, `codegen-units = 1`, etc.) in `r-pkg/src/rust/Cargo.toml` to strip dead Rust `std` `_exit`/`exit`/`abort` symbols where possible; document any remaining upstream `extendr-api` / Rust `std` symbols in `r-pkg/cran-comments.md` (excluded via `r-pkg/.Rbuildignore`).
+2. **`G30` (Wave 1, parallel):** Eliminate the `checking compiled code` WARNING (`R_NamespaceRegistry`, `_exit`/`abort`/`exit`) in `libnewhallrs.a` by enabling `[profile.release]` LTO (`lto = true`, `codegen-units = 1`) and any required `extendr-api` / Rust link-time dead-code elimination so `R CMD check --as-cran` reports **0 WARNINGs** (no `cran-comments.md` workarounds).
 3. **Verification Gate (Wave 2):** Run `R CMD build`, `R CMD check --as-cran --no-manual`, `devtools::test('r-pkg')`, `sync-core.sh --check`, and `cargo test --workspace --all-targets`, recording exact check results in `STATE_8.md`.
 
 ### Out of Scope (Deferred)
@@ -18,7 +18,7 @@ Eliminate the `Suggests not in mainstream repositories: jNSMR` NOTE and investig
 
 ### Decision Log (2026-11-24)
 - **D1 (`G29`):** Keep `test-jnsmr-parity.R` in `r-pkg/tests/testthat/` gated by `skip_on_cran()` + `requireNamespace("jNSMR", quietly = TRUE)` + `getExportedValue("jNSMR", "newhall_batch")`, removing `jNSMR` from `DESCRIPTION` `Suggests`.
-- **D2 (`G30`):** Check `extendr-api` upgrade/features + Cargo `[profile.release]` LTO/strip first; document any remaining upstream `extendr-api` / Rust `std` symbols in `r-pkg/cran-comments.md` (and ignore in `.Rbuildignore`).
+- **D2 (`G30`):** Do NOT document warnings or notes in `cran-comments.md`. Eliminate `R_NamespaceRegistry` and `_exit`/`abort`/`exit` from `newhallrs.so` / `libnewhallrs.a` via `[profile.release]` LTO (`lto = true`, `codegen-units = 1`) and link-time dead-code elimination; if any symbol survives LTO, stop and escalate to fix the root cause.
 - **D3 (Workers & Escalation):** `flash` workers, escalate to `pro` after 2 failed attempts; up to 2 parallel workers in Wave 1 on disjoint files.
 
 ---
@@ -28,7 +28,7 @@ Eliminate the `Suggests not in mainstream repositories: jNSMR` NOTE and investig
 | Wave | Task ID | Title | Repo | Depends On | Files in Scope (Create/Edit) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `8.1.1` | Remove `jNSMR` from `DESCRIPTION`, gate `test-jnsmr-parity.R`, clean `ci.yml` (`G29`) | `newhall-rs` | — | Edit: `r-pkg/DESCRIPTION`, `r-pkg/tests/testthat/test-jnsmr-parity.R`, `.github/workflows/ci.yml` |
-| 1 | `8.1.2` | Remediate/document `libnewhallrs.a` compiled-code symbols (`G30`) | `newhall-rs` | — | Edit: `r-pkg/src/rust/Cargo.toml`, `r-pkg/src/rust/Cargo.lock`, `r-pkg/.Rbuildignore`; Create: `r-pkg/cran-comments.md` |
+| 1 | `8.1.2` | Eliminate `libnewhallrs.a` compiled-code WARNING symbols via LTO/DCE (`G30`) | `newhall-rs` | — | Edit: `r-pkg/src/rust/Cargo.toml`, `r-pkg/src/rust/Cargo.lock` (if updated) |
 | 2 | `8.2.1` | Full `R CMD check --as-cran`, `testthat`, `sync-core.sh --check`, and Rust gate | `newhall-rs` | `8.1.1`, `8.1.2` | None (verification only; temp in `.development/tmp`) |
 
 ---
@@ -55,23 +55,20 @@ Eliminate the `Suggests not in mainstream repositories: jNSMR` NOTE and investig
 
 ---
 
-### Task `8.1.2`: Remediate/document `libnewhallrs.a` compiled-code symbols (`G30`)
+### Task `8.1.2`: Eliminate `libnewhallrs.a` compiled-code WARNING symbols via LTO/DCE (`G30`)
 - **Repo:** `/home/andrew/workspace/newhall-rs`
 - **Files in scope:**
-  - *Must edit:* `r-pkg/src/rust/Cargo.toml`, `r-pkg/src/rust/Cargo.lock`, `r-pkg/.Rbuildignore`
-  - *Must create:* `r-pkg/cran-comments.md`
+  - *Must edit:* `r-pkg/src/rust/Cargo.toml`, `r-pkg/src/rust/Cargo.lock` (if updated)
   - *Temp/scratch:* `.development/` (untracked)
-  - *Do not touch:* `crates/`, `r-pkg/R/`, `r-pkg/DESCRIPTION`, `r-pkg/tests/`.
+  - *Do not touch:* `crates/`, `r-pkg/R/`, `r-pkg/DESCRIPTION`, `r-pkg/tests/`. Do NOT create `cran-comments.md`.
 - **Depends on:** None
 - **Spec:**
-  1. Inspect `r-pkg/src/rust/Cargo.toml` and `Cargo.lock` (`extendr-api 0.8.2`). Check if a newer `extendr-api` patch/minor version is available on crates.io or if `extendr-api` features avoid `R_NamespaceRegistry`.
-  2. Add `[profile.release]` tuning in `r-pkg/src/rust/Cargo.toml` (e.g., `lto = true`, `codegen-units = 1`) and test `cargo build --release --manifest-path r-pkg/src/rust/Cargo.toml` followed by `nm -A -u r-pkg/src/rust/target/release/libnewhallrs.a | grep -E 'R_NamespaceRegistry|\b_?exit\b|\babort\b'` to measure which symbols are eliminated.
-  3. Create `r-pkg/cran-comments.md` documenting the local `R CMD check --as-cran` environment, test results, and any remaining upstream `extendr-api` (`R_NamespaceRegistry`) or Rust `std` (`abort`/`_exit`/`exit`) symbols if still present after LTO.
-  4. Add `^cran-comments\.md$` to `r-pkg/.Rbuildignore` so `R CMD check` does not flag it as a non-standard top-level file.
-- **Grep anchors:** `r-pkg/src/rust/Cargo.toml`, `r-pkg/.Rbuildignore`.
+  1. Add `[profile.release]` with `lto = true` and `codegen-units = 1` in `r-pkg/src/rust/Cargo.toml` so unused `extendr-api` functions (`R_NamespaceRegistry` in `extendr_api::functions::namespace_registry`) and dead Rust `std` symbols (`_exit`, `exit`, `abort`) are dead-code-eliminated from `libnewhallrs.a` / `newhallrs.so`.
+  2. Build with `cargo build --release --manifest-path r-pkg/src/rust/Cargo.toml` and inspect `nm -A -u r-pkg/src/rust/target/release/libnewhallrs.a | grep -E 'R_NamespaceRegistry|\b_?exit\b|\babort\b' || true`.
+  3. If any of those symbols still survive in `libnewhallrs.a` or `newhallrs.so`, STOP and report the exact surviving symbols and originating object files so the orchestrator can escalate to a root-cause fix.
+- **Grep anchors:** `r-pkg/src/rust/Cargo.toml`.
 - **Acceptance & targeted verification:**
-  - `cargo build --release --manifest-path r-pkg/src/rust/Cargo.toml` exits 0.
-  - `nm -A -u r-pkg/src/rust/target/release/libnewhallrs.a | grep -E 'R_NamespaceRegistry|\b_?exit\b|\babort\b' || true` output recorded in worker report.
+  - `cargo build --release --manifest-path r-pkg/src/rust/Cargo.toml` exits 0, and `nm -A -u r-pkg/src/rust/target/release/libnewhallrs.a | grep -E 'R_NamespaceRegistry|\b_?exit\b|\babort\b'` produces empty output (or exact surviving symbols reported if blocked).
 
 ---
 
@@ -88,4 +85,4 @@ Eliminate the `Suggests not in mainstream repositories: jNSMR` NOTE and investig
   4. Report exact `R CMD check --as-cran` errors, warnings, and notes (confirming zero `Suggests` / `unstated dependencies in 'tests'` issues).
 - **Grep anchors:** `planning/STATE_8.md`.
 - **Acceptance & targeted verification:**
-  - All Rust tests, `sync-core.sh --check`, and `devtools::test('r-pkg')` pass with 0 failures; `R CMD check --as-cran --no-manual` exits 0 with 0 ERRORs and 0 `Suggests`/unstated-dependency NOTEs.
+  - All Rust tests, `sync-core.sh --check`, and `devtools::test('r-pkg')` pass with 0 failures; `R CMD check --as-cran --no-manual` exits 0 with **0 ERRORs**, **0 WARNINGs**, and **0 `Suggests`/unstated-dependency NOTEs**.
