@@ -1,7 +1,7 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-26
-Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root docs, crates.io readiness)
+Source State: STATE_9.md (Orchestration 9 complete: G24 CSV Phase 4 method, G28 release workflow, G22 vignette)
 
 ## Circled Goal (Active)
 
@@ -11,6 +11,10 @@ Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root
   - First action: Decide between `#![no_std]` C-API bridge (no `extendr-api`/`std`) vs. linker symbol-wrapping / CRAN Rust `abort` policy.
 
 ## Completed Goals
+
+- **[G24]** `newhall_batch_phase4.character` (CSV paths) completes S3 parity with `newhall_batch` (`default`, `data.frame`, `character`, `SpatRaster`), with testthat coverage (`STATE_9.md`, `2373dfa`).
+- **[G28]** Tag-triggered `.github/workflows/release.yml` checks version sync across the Cargo.toml files and `DESCRIPTION`, builds `newhall-cli` for Linux/macOS/Windows plus the `newhallrs` source tarball, and attaches them to the GitHub release. No crates.io publish. Runtime is unverified until the first `v*` tag (`STATE_9.md`, `12b583c`, `dc6d122`).
+- **[G22]** `r-pkg/vignettes/newhall-workflows.Rmd` covers tabular, CSV, strict-mode, Phase 4, and terra-guarded `SpatRaster` workflows and builds under `R CMD build`. CI installs pandoc/knitr/rmarkdown (`STATE_9.md`, `e3b499d`, `0d5e588`).
 
 - **[G29]** `r-pkg` removed `jNSMR` from `DESCRIPTION` `Suggests`, gated `test-jnsmr-parity.R` with `skip_on_cran()` + `requireNamespace("jNSMR")` + `getExportedValue()`, and removed `_R_CHECK_FORCE_SUGGESTS_=false` from CI (`STATE_8.md`, `e5d2342`).
 
@@ -40,12 +44,7 @@ Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G22]** User-facing R vignette(s) in `r-pkg/vignettes/` demonstrate tabular, `terra::SpatRaster`, strict-mode, and Phase 4 workflows and build cleanly under `R CMD build`.
-  - Depends on: G24
-- **[G24]** `newhall_batch_phase4.character` (CSV/path method) completes full S3 parity with `newhall_batch` (`default`, `data.frame`, `character`, `SpatRaster`), with testthat coverage.
-  - Depends on: none (G20 complete)
-- **[G28]** Automated release workflow (`.github/workflows/release.yml`) builds and attaches `newhall-cli` binaries and the `newhallrs` R source tarball on `v*` tags with synchronized versions.
-  - Depends on: none (G19, G20, G21, G25 complete)
+(None pending. G22, G24, G28 completed in Orchestration 9.)
 
 ## Independent Backlog
 

@@ -18,7 +18,7 @@ Goals: G24, G28, G22 (from `planning/GOALS.md`).
 | --- | --- | --- | --- |
 | 1 | 9.1.1 G24 character method | done | `2373dfa` |
 | 1 | 9.1.2 G28 release workflow | done | `12b583c` |
-| 2 | 9.2.1 G22 vignettes | pending (depends on 9.1.1, 9.1.2; scope widened by D6) | — |
+| 2 | 9.2.1 G22 vignettes | done | `e3b499d`, `dc6d122`, `0d5e588` |
 
 Gate after wave 1: serial R test run. Gate after wave 2: `R CMD build` + `R CMD check` serial run, then the final verification list in EXECUTION_PLAN_9.md.
 
@@ -47,3 +47,21 @@ Gate after wave 1: serial R test run. Gate after wave 2: `R CMD build` + `R CMD 
 ## Wave 1 gate
 
 - `R CMD INSTALL r-pkg && R -q -e 'library(newhallrs); testthat::test_dir("r-pkg/tests/testthat")'`: FAIL 0 / WARN 0 / SKIP 3 / PASS 141 (baseline 132, +9 new expectations). Wave 1 done.
+
+## 9.2.1
+
+- Status: done (sonnet worker). The orchestrator saved the micro-TODO from the plan report, because the worker didn't write the file. One FAILED VERIFICATION retry: the vignette gave `zWt` in cm (it is m) and described `strict = TRUE` backwards. Fixed in a follow-up commit, which also corrected snow columns from "need" to "can also carry" (they are all-or-none, default 0).
+- Files: `r-pkg/DESCRIPTION` (+knitr, rmarkdown in Suggests; `VignetteBuilder: knitr`; Version unchanged), `r-pkg/vignettes/newhall-workflows.Rmd` (new, 5 sections, terra chunks guarded per D3), `.github/workflows/ci.yml` (`r-check`: setup-pandoc, knitr/rmarkdown), `.github/workflows/release.yml` (`r-source-tarball`: setup-pandoc, knitr/rmarkdown install).
+- Commits: `e3b499d` (vignette + DESCRIPTION), `dc6d122` (CI deps, D6), `0d5e588` (vignette text corrections).
+- Tests: `R CMD build` output includes `vignettes/newhall-workflows.Rmd` and `inst/doc/newhall-workflows.html`. Rendered with terra. The no-terra render was simulated on a scratch copy with the terra chunks set to `eval = FALSE` (terra shares the user library). YAML parse ok.
+- Deviations: none beyond the retry.
+
+## Final verification (orchestrator, serial, on `0d5e588`)
+
+1. `cargo test --workspace`: 76 passed, 0 failed (= baseline).
+2. `bash r-pkg/tools/sync-core.sh --check`: OK.
+3. R suite: FAIL 0 / WARN 0 / SKIP 3 / PASS 141.
+4. `R CMD build r-pkg && R CMD check --no-manual`: Status 1 WARNING (`checking compiled code`, G30), identical to the baseline. No NOTEs, no ERRORs. The vignette builds and is in the tarball.
+5. YAML check on `release.yml` (and `ci.yml` parse): ok.
+
+Orchestration 9 complete. Not verified locally: `release.yml` and the CI changes run only on GitHub (first `v*` tag push / next CI run).
