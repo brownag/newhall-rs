@@ -5,11 +5,11 @@ Goals: G24, G28, G22 (from `planning/GOALS.md`).
 
 ## Baseline checklist (complete before wave 1)
 
-- [ ] `git status` clean on the working branch; record branch name: ______
-- [ ] `cargo test --workspace` green (record pass count): ______
-- [ ] `cargo test -p newhall-core --no-default-features` green
-- [ ] `bash r-pkg/tools/sync-core.sh --check` green
-- [ ] `R -q -e 'testthat::test_dir("r-pkg/tests/testthat")'` green (record PASS/FAIL/SKIP counts): ______
+- [x] `git status` clean on the working branch; record branch name: `feat/phase4-csv-release-vignettes` (created from `main` at `392a715`)
+- [x] `cargo test --workspace` green (record pass count): 76 passed, 0 failed
+- [x] `cargo test -p newhall-core --no-default-features` green: 70 passed, 0 failed
+- [x] `bash r-pkg/tools/sync-core.sh --check` green
+- [x] `R -q -e 'testthat::test_dir("r-pkg/tests/testthat")'` green (record PASS/FAIL/SKIP counts): FAIL 0 / WARN 0 / SKIP 3 / PASS 132. Note: needs `R CMD INSTALL r-pkg` first and `library(newhallrs);` before `test_dir`/`test_file`, or tests fail with "could not find function".
 - [ ] Known pre-existing: `R CMD check --as-cran` WARNING (G30, out of scope). Record as the baseline to keep unchanged.
 
 ## Wave board
