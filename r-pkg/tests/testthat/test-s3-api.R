@@ -250,6 +250,36 @@ test_that("newhall_batch.character reads single and multiple CSV file paths", {
   expect_error(newhall_batch(tempfile(fileext = ".csv")), "not found")
 })
 
+test_that("newhall_batch_phase4.character reads single and multiple CSV file paths", {
+  df <- make_s3_test_df()
+  df$zWt <- c(0.3, 100.0, 100.0, 100.0)
+  df$oHorizonThickness <- c(0.0, 0.0, 0.12, 0.0)
+  for (m in month.abb) {
+    df[[paste0("snow", m)]] <- 0.0
+  }
+  df$snowJan[3] <- 0.8
+
+  tmp1 <- tempfile(fileext = ".csv")
+  tmp2 <- tempfile(fileext = ".csv")
+  on.exit(unlink(c(tmp1, tmp2)), add = TRUE)
+  utils::write.csv(df[1:2, , drop = FALSE], tmp1, row.names = FALSE)
+  utils::write.csv(df[3:4, , drop = FALSE], tmp2, row.names = FALSE)
+
+  res_single <- newhall_batch_phase4(tmp1)
+  expect_equal(res_single, newhall_batch_phase4(df[1:2, , drop = FALSE]))
+
+  res_multi <- newhall_batch_phase4(c(tmp1, tmp2))
+  expect_equal(res_multi, newhall_batch_phase4(df))
+  expect_equal(names(res_multi), expected_output_names(include_phase4 = TRUE))
+  expect_type(res_multi$temperatureRegime, "character")
+  expect_type(res_multi$moistureRegime, "character")
+
+  expect_error(newhall_batch_phase4(character(0)), "at least one CSV")
+  expect_error(newhall_batch_phase4(NA_character_), "cannot be NA or empty")
+  expect_error(newhall_batch_phase4(""), "cannot be NA or empty")
+  expect_error(newhall_batch_phase4(tempfile(fileext = ".csv")), "not found")
+})
+
 test_that("newhall_batch.SpatRaster handles NA cells, multi-block chunking, cats, and strict mode", {
   skip_if_not_installed("terra")
 

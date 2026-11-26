@@ -174,9 +174,11 @@ newhall_batch.character <- function(.data, ...) {
 
 #' Run Phase 4 Newhall Simulation with 1D Thermal and Water-Table Physics
 #'
-#' Generic Phase 4 batch entry point supporting vector/matrix inputs (`default`)
-#' and `data.frame` inputs (with optional `oHorizonThickness`, `bulkDensity`,
-#' `quartzFraction`, `porosity`, `zWt`, and `snowJan`..`snowDec` columns).
+#' Generic Phase 4 batch entry point supporting vector/matrix inputs
+#' (`default`), character vectors of CSV file paths (`character`), `data.frame`
+#' inputs (with optional `oHorizonThickness`, `bulkDensity`, `quartzFraction`,
+#' `porosity`, `zWt`, and `snowJan`..`snowDec` columns), and `terra`
+#' `SpatRaster` inputs (`SpatRaster`).
 #'
 #' @param .data Input `data.frame`, or omitted/`NULL`/latitude vector for the
 #'   default vector/matrix interface.
@@ -366,4 +368,26 @@ newhall_batch_phase4.data.frame <- function(
     strict_forcing = strict_forcing
   )
   .decode_regimes(res)
+}
+
+#' @rdname newhall_batch_phase4
+#' @method newhall_batch_phase4 character
+#' @export
+newhall_batch_phase4.character <- function(.data, ...) {
+  if (length(.data) == 0L) {
+    stop("'.data' must contain at least one CSV file path.", call. = FALSE)
+  }
+  if (anyNA(.data) || any(!nzchar(.data))) {
+    stop("File paths in '.data' cannot be NA or empty.", call. = FALSE)
+  }
+  missing_files <- .data[!file.exists(.data)]
+  if (length(missing_files) > 0L) {
+    stop(
+      sprintf("CSV file(s) not found: %s", paste(missing_files, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+  dfs <- lapply(.data, utils::read.csv, stringsAsFactors = FALSE)
+  df <- if (length(dfs) == 1L) dfs[[1L]] else do.call(rbind, dfs)
+  newhall_batch_phase4.data.frame(df, ...)
 }

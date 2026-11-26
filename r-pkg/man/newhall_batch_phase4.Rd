@@ -5,6 +5,7 @@
 \alias{newhall_batch_phase4_raw}
 \alias{newhall_batch_phase4.default}
 \alias{newhall_batch_phase4.data.frame}
+\alias{newhall_batch_phase4.character}
 \title{Run Phase 4 Newhall Simulation with 1D Thermal and Water-Table Physics}
 \usage{
 newhall_batch_phase4(.data, ...)
@@ -61,6 +62,8 @@ newhall_batch_phase4_raw(
   strict_forcing = TRUE,
   ...
 )
+
+\method{newhall_batch_phase4}{character}(.data, ...)
 }
 \arguments{
 \item{.data}{Input \code{data.frame}, or omitted/\code{NULL}/latitude vector for the
@@ -148,7 +151,9 @@ return integer regime codes; \code{newhall_batch_phase4.data.frame()} returns
 decoded character regime names).
 }
 \description{
-Generic Phase 4 batch entry point supporting vector/matrix inputs (\code{default})
-and \code{data.frame} inputs (with optional \code{oHorizonThickness}, \code{bulkDensity},
-\code{quartzFraction}, \code{porosity}, \code{zWt}, and \code{snowJan}..\code{snowDec} columns).
+Generic Phase 4 batch entry point supporting vector/matrix inputs
+(\code{default}), character vectors of CSV file paths (\code{character}), \code{data.frame}
+inputs (with optional \code{oHorizonThickness}, \code{bulkDensity}, \code{quartzFraction},
+\code{porosity}, \code{zWt}, and \code{snowJan}..\code{snowDec} columns), and \code{terra}
+\code{SpatRaster} inputs (\code{SpatRaster}).
 }
