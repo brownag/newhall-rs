@@ -16,7 +16,7 @@ Goals: G24, G28, G22 (from `planning/GOALS.md`).
 
 | Wave | Task | Status | Commit(s) |
 | --- | --- | --- | --- |
-| 1 | 9.1.1 G24 character method | pending | — |
+| 1 | 9.1.1 G24 character method | done | `2373dfa` |
 | 1 | 9.1.2 G28 release workflow | done | `12b583c` |
 | 2 | 9.2.1 G22 vignettes | pending (depends on 9.1.1, 9.1.2; scope widened by D6) | — |
 
@@ -34,3 +34,16 @@ Gate after wave 1: serial R test run. Gate after wave 2: `R CMD build` + `R CMD 
 - Tests: spec YAML check `ok`. Version-check script extracted from the YAML: `v0.1.0` exit 0, `v0.2.0` exit 1 (reproduced by the orchestrator).
 - Deviations: none. The `<target>` labels are `linux-x86_64`, `macos-arm64`, `windows-x86_64` (worker's choice; macos-latest runners are arm64).
 - Gotchas: runtime is unverified until the first real tag push (no actionlint). `r-source-tarball` lacks pandoc/knitr/rmarkdown and will fail once vignettes land. Fixed by D6 in 9.2.1.
+
+## 9.1.1
+
+- Status: done (sonnet worker). One FAILED VERIFICATION retry: the first commit left SpatRaster out of the roxygen description and had a line over 80 chars. The amend fixed both.
+- Files: `r-pkg/R/newhall.R` (description 177-181; new `newhall_batch_phase4.character` at end of file), `r-pkg/NAMESPACE` (+`S3method(newhall_batch_phase4,character)`), `r-pkg/man/newhall_batch_phase4.Rd` (regen), `r-pkg/tests/testthat/test-s3-api.R` (new test after the `newhall_batch.character` test, ~253-281).
+- Commit: `2373dfa` (cherry-picked from worktree `a139255`).
+- Tests: `R CMD INSTALL r-pkg && R -q -e 'library(newhallrs); testthat::test_file("r-pkg/tests/testthat/test-s3-api.R")'` FAIL 0 / PASS 114.
+- Deviations: none after the retry.
+- Gotchas for 9.2.1: CSVs must carry the Phase 4 columns (`zWt`, `oHorizonThickness`, `snowJan`..`snowDec`). Optional columns default as in the data.frame method. Error messages match `newhall_batch.character`.
+
+## Wave 1 gate
+
+- `R CMD INSTALL r-pkg && R -q -e 'library(newhallrs); testthat::test_dir("r-pkg/tests/testthat")'`: FAIL 0 / WARN 0 / SKIP 3 / PASS 141 (baseline 132, +9 new expectations). Wave 1 done.
