@@ -74,8 +74,8 @@ res_csv <- newhall_batch(c(csv1, csv2))
 all.equal(res_csv, res)
 ```
 
-`newhall_batch_phase4()` accepts paths too. Phase 4 CSVs need monthly snow
-depth columns (`snowJan` to `snowDec`, m).
+`newhall_batch_phase4()` accepts paths too. Phase 4 CSVs can also carry
+monthly snow depth columns (`snowJan` to `snowDec`, m).
 
 ```{r csv-phase4}
 df4 <- df
@@ -91,8 +91,9 @@ unlink(c(csv1, csv2, csv4))
 
 ## 3. Strict mode
 
-`strict = TRUE` runs the classic algorithm without the package's relaxations.
-Compare it with the default run on the regime columns.
+`strict = TRUE` uses the defect-remediated `StrictNewhall` physics instead of
+the classic jNSM-compatible `ClassicNewhall` model. Compare it with the
+default run on the regime columns.
 
 ```{r strict}
 res_strict <- newhall_batch(df, strict = TRUE)
@@ -112,7 +113,7 @@ The last line shows whether strict mode changed any regime for these sites.
 ## 4. Phase 4 workflow
 
 `newhall_batch_phase4()` adds 1D soil thermal and water-table physics. Site
-level parameters such as `zWt` (water-table depth, cm) and
+level parameters such as `zWt` (water-table depth, m) and
 `oHorizonThickness` (m) can be columns in the data frame.
 
 ```{r phase4}
