@@ -28,8 +28,8 @@ fn thermal_energy_conservation_insulated_step_profile() {
         dz,
         ..SoilThermalState::default()
     };
-    for i in 0..THERMAL_NODES {
-        state.temp_c[i] = if i < 8 { 20.0 } else { 0.0 };
+    for (i, t) in state.temp_c.iter_mut().enumerate() {
+        *t = if i < 8 { 20.0 } else { 0.0 };
     }
     let mats = [NodeMaterial {
         theta_tot: 0.30,
@@ -56,8 +56,8 @@ fn second_law_monotonicity_under_constant_t_air() {
         dz,
         ..SoilThermalState::default()
     };
-    for i in 0..THERMAL_NODES {
-        state.temp_c[i] = (i as f64) * 1.5 - 5.0; // -5.0 to +17.5 C
+    for (i, t) in state.temp_c.iter_mut().enumerate() {
+        *t = (i as f64) * 1.5 - 5.0; // -5.0 to +17.5 C
     }
     let t_air = 3.0;
     let t_min_bound = state.temp_c.iter().copied().fold(t_air, f64::min);

@@ -1245,8 +1245,8 @@ mod tests {
         let cfg = SiteConfig::default();
         let wb = dry_water_balance();
         let mut soil = SoilState::default();
-        for d in 0..360 {
-            soil.iday[d] = if d < 180 { 3 } else { 1 };
+        for (d, v) in soil.iday.iter_mut().enumerate() {
+            *v = if d < 180 { 3 } else { 1 };
         }
         soil.nd = [180.0, 0.0, 180.0];
 
@@ -1285,8 +1285,8 @@ mod tests {
         let wb = dry_water_balance();
         let mut soil = SoilState::default();
         // Moist days 1..100, Dry days 101..360 (consecutive moist run = 100)
-        for d in 0..360 {
-            soil.iday[d] = if d < 100 { 3 } else { 1 };
+        for (d, v) in soil.iday.iter_mut().enumerate() {
+            *v = if d < 100 { 3 } else { 1 };
         }
         soil.nd = [260.0, 0.0, 100.0];
 
@@ -1339,8 +1339,8 @@ mod tests {
     fn strict_thermal_defect_2_unit_conversion() {
         let wb = dry_water_balance();
         let mut soil = SoilState::default();
-        for d in 0..360 {
-            soil.iday[d] = if d < 180 { 3 } else { 1 };
+        for (d, v) in soil.iday.iter_mut().enumerate() {
+            *v = if d < 180 { 3 } else { 1 };
         }
         soil.nd = [180.0, 0.0, 180.0];
 
@@ -1434,8 +1434,8 @@ mod tests {
 
         // Udic with 30 <= nd[0]+nd[1] < 90: st - wt = 6.0 (>= 5.0 unattenuated, 3.96 attenuated).
         let mut soil_udic = SoilState::default();
-        for d in 0..360 {
-            soil_udic.iday[d] = if d < 50 { 1 } else { 3 };
+        for (d, v) in soil_udic.iday.iter_mut().enumerate() {
+            *v = if d < 50 { 1 } else { 3 };
         }
         soil_udic.nd = [50.0, 0.0, 310.0];
 
@@ -1476,8 +1476,8 @@ mod tests {
         let cfg = SiteConfig::default();
         let wb = dry_water_balance();
         let mut soil = SoilState::default();
-        for d in 0..360 {
-            soil.iday[d] = if d < 100 { 3 } else { 1 };
+        for (d, v) in soil.iday.iter_mut().enumerate() {
+            *v = if d < 100 { 3 } else { 1 };
         }
         soil.nd = [260.0, 0.0, 100.0];
 
@@ -1525,8 +1525,8 @@ mod tests {
         let wb = dry_water_balance();
         let mut soil = SoilState::default();
         // First 180 days moist (3), second 180 days dry (1).
-        for d in 0..360 {
-            soil.iday[d] = if d < 180 { 3 } else { 1 };
+        for (d, v) in soil.iday.iter_mut().enumerate() {
+            *v = if d < 180 { 3 } else { 1 };
         }
         soil.nd = [180.0, 0.0, 180.0];
 
