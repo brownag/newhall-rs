@@ -55,13 +55,15 @@ Orchestration 9. Source: `planning/GOALS.md` (magic-wand selection, 2026-11-26).
 - **2026-11-26 D4 (wave ordering):** G22 depends on G24, not only G20. The vignette demonstrates the CSV path workflow, which needs the `character` method. This corrects the stale `Depends on: G20` in GOALS.md. G22 also demonstrates `newhall_batch_phase4`, which already exists.
 - **2026-11-26 D5 (version):** No version bumps in this plan. G28 verifies the existing `0.1.0` sync across `Cargo.toml` files and `DESCRIPTION`. A bump is a separate release decision.
 
+- **2026-11-26 D6 (CI vignette deps, re-scope of 9.2.1):** Once vignettes exist, `R CMD build` knits them. That needs `knitr`, `rmarkdown`, and pandoc on the runner, and neither `ci.yml` (`r-check`) nor `release.yml` (`r-source-tarball`) installs them. This is a decomposition gap found while reviewing 9.1.2. 9.2.1 now owns adding `r-lib/actions/setup-pandoc@v2` and `knitr`/`rmarkdown` installation to both jobs. No other workflow changes.
+
 ## Wave table
 
 | Wave | Task | Goal | Repo | Depends on | Files (must edit) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 9.1.1 | G24 | newhall-rs | — | `r-pkg/R/newhall.R`, `r-pkg/NAMESPACE` (regen), `r-pkg/man/newhall_batch_phase4.Rd` (regen), `r-pkg/tests/testthat/test-s3-api.R` |
 | 1 | 9.1.2 | G28 | newhall-rs | — | `.github/workflows/release.yml` (new) |
-| 2 | 9.2.1 | G22 | newhall-rs | 9.1.1 | `r-pkg/vignettes/` (new), `r-pkg/DESCRIPTION` (VignetteBuilder, Suggests), `r-pkg/.Rbuildignore` (only if needed) |
+| 2 | 9.2.1 | G22 | newhall-rs | 9.1.1, 9.1.2 | `r-pkg/vignettes/` (new), `r-pkg/DESCRIPTION` (VignetteBuilder, Suggests), `r-pkg/.Rbuildignore` (only if needed), workflow dependency steps (D6) |
 
 **Disjointness.** Wave 1 pair: 9.1.1 touches only R package files; 9.1.2 touches only a new workflow file. Disjoint. Wave 2 has one task, so no intra-wave conflict.
 
@@ -108,7 +110,8 @@ Orchestration 9. Source: `planning/GOALS.md` (magic-wand selection, 2026-11-26).
   - Must edit: `r-pkg/DESCRIPTION` (add `VignetteBuilder: knitr`, add `knitr` and `rmarkdown` to `Suggests`; do **not** change `Version:`).
   - Can create: `r-pkg/vignettes/newhall-workflows.Rmd`, plus any `r-pkg/vignettes/*.Rmd` needed. Optional `r-pkg/vignettes/.gitignore` only if build artifacts appear.
   - Can edit only if needed: `r-pkg/.Rbuildignore`.
-  - Do not touch: `r-pkg/R/`, `r-pkg/NAMESPACE`, `r-pkg/man/`, `r-pkg/src/`, `.github/`, `CHANGELOG.md`.
+  - Can edit (D6, dependency steps only): `.github/workflows/ci.yml` job `r-check` and `.github/workflows/release.yml` job `r-source-tarball`. Add an `r-lib/actions/setup-pandoc@v2` step and install `knitr` and `rmarkdown` before `R CMD build`. Change nothing else in either workflow.
+  - Do not touch: `r-pkg/R/`, `r-pkg/NAMESPACE`, `r-pkg/man/`, `r-pkg/src/`, other parts of `.github/`, `CHANGELOG.md`.
 - **Spec.** Write one vignette, `newhall-workflows.Rmd`, with `output: rmarkdown::html_vignette` and `%\VignetteIndexEntry{newhall workflows}`, `%\VignetteEngine{knitr::rmarkdown}`, and `%\VignetteEncoding{UTF-8}`. Sections: (1) tabular `newhall_batch.data.frame` workflow; (2) CSV path workflow via `newhall_batch.character` and `newhall_batch_phase4.character` (from 9.1.1); (3) strict mode (`strict = TRUE`) comparison with the classic run; (4) Phase 4 workflow with `newhall_batch_phase4.data.frame`; (5) `terra::SpatRaster` workflow with `newhall_batch.SpatRaster`/`newhall_batch_phase4.SpatRaster`. Chunks for section 5 use `eval = requireNamespace("terra", quietly = TRUE)` (decision D3). Tabular, CSV, and Phase 4 data.frame chunks always run. Keep chunks small so the vignette builds fast. Use only exported functions and documented arguments; check exact argument names against the roxygen in `r-pkg/R/newhall.R` and `r-pkg/R/raster.R`. Use `temp` CSVs created with `tempfile()` in the CSV section; do not depend on files outside the package.
 - **Grep anchors:** `newhall_batch.data.frame` (newhall.R ~91), `newhall_batch.character` (~127), `newhall_batch_phase4.data.frame` (~311), `newhall_batch.SpatRaster` (raster.R), `newhall_batch_phase4.SpatRaster` (raster.R ~311), `strict` argument (newhall.R ~44 `newhall_batch_raw`).
 - **Reference implementation:** the test fixtures in `r-pkg/tests/testthat/test-s3-api.R` and `test-phase4.R` show valid input frames and argument names.
