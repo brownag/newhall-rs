@@ -200,3 +200,6 @@ Sample GeoTIFFs (`113 x 168 x 28`, `18,984` total cells / `18,790` valid cells; 
 - [Benchmark Report](planning/benchmarks/jnsmr_raster_benchmark.md)
 - [Changelog](CHANGELOG.md)
 - [MIT License](LICENSE)
+- [Notice & Acknowledgements](NOTICE.md)
+
+**Acknowledgements:** newhall-rs builds on Franklin Newhall's soil moisture regime model, the Van Wambeke BASIC implementation, and the Java Newhall Simulation Model ([jNSM](https://github.com/drww/newhall)) by Drew Waltman, as extended in [jNSMR](https://github.com/ncss-tech/jNSMR). No jNSM or jNSMR source code is included; see [NOTICE.md](NOTICE.md) for details.
