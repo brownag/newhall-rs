@@ -1,6 +1,6 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-24
+Last Updated: 2026-11-26
 Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root docs, crates.io readiness)
 
 ## Circled Goal (Active)
@@ -41,11 +41,11 @@ Source State: STATE_7.md (Orchestration 7 complete — CI/CD, CRAN hygiene, root
 ## Sequenced Goals (Dependency DAG)
 
 - **[G22]** User-facing R vignette(s) in `r-pkg/vignettes/` demonstrate tabular, `terra::SpatRaster`, strict-mode, and Phase 4 workflows and build cleanly under `R CMD build`.
-  - Depends on: G20
+  - Depends on: G24
 - **[G24]** `newhall_batch_phase4.character` (CSV/path method) completes full S3 parity with `newhall_batch` (`default`, `data.frame`, `character`, `SpatRaster`), with testthat coverage.
-  - Depends on: G20
+  - Depends on: none (G20 complete)
 - **[G28]** Automated release workflow (`.github/workflows/release.yml`) builds and attaches `newhall-cli` binaries and the `newhallrs` R source tarball on `v*` tags with synchronized versions.
-  - Depends on: G19, G20, G21, G25
+  - Depends on: none (G19, G20, G21, G25 complete)
 
 ## Independent Backlog
 
