@@ -107,6 +107,12 @@ jobs:
         with:
           use-public-rspm: true
 
+      - name: Set up pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install vignette dependencies
+        run: Rscript -e "install.packages(c('knitr', 'rmarkdown'))"
+
       - name: Build R source package
         run: R CMD build r-pkg
 
