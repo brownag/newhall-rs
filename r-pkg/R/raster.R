@@ -1,4 +1,4 @@
-# Chunked terra::SpatRaster S3 methods for newhall_batch and newhall_batch_phase4.
+# Chunked terra::SpatRaster S3 methods for newhall_batch and newhall_batch_hydrothermal.
 
 .require_terra <- function() {
   if (!requireNamespace("terra", quietly = TRUE)) {
@@ -6,7 +6,7 @@
   }
 }
 
-.newhall_output_names <- function(include_phase4 = FALSE) {
+.newhall_output_names <- function(include_hydrothermal = FALSE) {
   base_names <- c(
     "annualRainfall",
     "waterHoldingCapacity",
@@ -28,7 +28,7 @@
     "regimeSubdivision1",
     "regimeSubdivision2"
   )
-  if (isTRUE(include_phase4)) {
+  if (isTRUE(include_hydrothermal)) {
     c(base_names, "satDaysMcs", "aquicBioDays")
   } else {
     base_names
@@ -49,13 +49,13 @@
   invisible(TRUE)
 }
 
-.validate_phase4_snow_layers <- function(layer_names) {
+.validate_hydrothermal_snow_layers <- function(layer_names) {
   snow_cols <- paste0("snow", month.abb)
   present <- snow_cols %in% layer_names
   if (any(present) && !all(present)) {
     stop(
       sprintf(
-        "Partial Phase 4 snow layers found; missing: %s",
+        "Partial hydrothermal snow layers found; missing: %s",
         paste(snow_cols[!present], collapse = ", ")
       ),
       call. = FALSE
@@ -111,7 +111,7 @@
   out
 }
 
-.extract_phase4_vector <- function(df, layer_name, default_val, n) {
+.extract_hydrothermal_vector <- function(df, layer_name, default_val, n) {
   if (layer_name %in% names(df)) {
     as.double(df[[layer_name]])
   } else {
@@ -241,7 +241,7 @@ newhall_batch.SpatRaster <- function(
   is_metric <- .normalize_unit_system(unitSystem)
   force(soilAirOffset)
 
-  out_names <- .newhall_output_names(include_phase4 = FALSE)
+  out_names <- .newhall_output_names(include_hydrothermal = FALSE)
   .run_spatraster_chunks(
     .data = .data,
     out_names = out_names,
@@ -275,7 +275,7 @@ newhall_batch.SpatRaster <- function(
   )
 }
 
-#' Run Phase 4 Newhall Batch Simulation on a `terra::SpatRaster`
+#' Run Hydrothermal Newhall Batch Simulation on a `terra::SpatRaster`
 #'
 #' @inheritParams newhall_batch.SpatRaster
 #' @param o_horizon_thickness Scalar O-horizon thickness (m) used when the
@@ -306,9 +306,9 @@ newhall_batch.SpatRaster <- function(
 #' @return A 21-layer `terra::SpatRaster` (`annualRainfall`..`regimeSubdivision2`,
 #'   `satDaysMcs`, `aquicBioDays`) with 0-indexed categorical tables attached to
 #'   layers 16--19 via `terra::set.cats()`.
-#' @method newhall_batch_phase4 SpatRaster
+#' @method newhall_batch_hydrothermal SpatRaster
 #' @export
-newhall_batch_phase4.SpatRaster <- function(
+newhall_batch_hydrothermal.SpatRaster <- function(
     .data,
     unitSystem = "metric",
     soilAirOffset = 2.5,
@@ -339,15 +339,15 @@ newhall_batch_phase4.SpatRaster <- function(
   is_metric <- .normalize_unit_system(unitSystem)
   if (!isTRUE(is_metric)) {
     stop(
-      "newhall_batch_phase4() only supports metric 'unitSystem' ('metric', 'mm', 'cm').",
+      "newhall_batch_hydrothermal() only supports metric 'unitSystem' ('metric', 'mm', 'cm').",
       call. = FALSE
     )
   }
-  has_snow_layers <- .validate_phase4_snow_layers(names(.data))
+  has_snow_layers <- .validate_hydrothermal_snow_layers(names(.data))
   snow_cols <- paste0("snow", month.abb)
   snow_scalar <- as.double(snow_depth)[1L]
 
-  out_names <- .newhall_output_names(include_phase4 = TRUE)
+  out_names <- .newhall_output_names(include_hydrothermal = TRUE)
   .run_spatraster_chunks(
     .data = .data,
     out_names = out_names,
@@ -369,7 +369,7 @@ newhall_batch_phase4.SpatRaster <- function(
       } else {
         matrix(snow_scalar, nrow = n_valid, ncol = 12L)
       }
-      newhall_batch_phase4_raw(
+      newhall_batch_hydrothermal_raw(
         lat = inp$lat,
         lon = inp$lon,
         temp = inp$temp,
@@ -377,19 +377,19 @@ newhall_batch_phase4.SpatRaster <- function(
         awc = inp$awc,
         elev = inp$elev,
         snow_depth = snow_mat,
-        o_horizon_thickness = .extract_phase4_vector(
+        o_horizon_thickness = .extract_hydrothermal_vector(
           valid_chunk, "oHorizonThickness", o_horizon_thickness, n_valid
         ),
-        bulk_density = .extract_phase4_vector(
+        bulk_density = .extract_hydrothermal_vector(
           valid_chunk, "bulkDensity", bulk_density, n_valid
         ),
-        quartz_fraction = .extract_phase4_vector(
+        quartz_fraction = .extract_hydrothermal_vector(
           valid_chunk, "quartzFraction", quartz_fraction, n_valid
         ),
-        porosity = .extract_phase4_vector(
+        porosity = .extract_hydrothermal_vector(
           valid_chunk, "porosity", porosity, n_valid
         ),
-        z_wt = .extract_phase4_vector(
+        z_wt = .extract_hydrothermal_vector(
           valid_chunk, "zWt", z_wt, n_valid
         ),
         use_thermal_1d = isTRUE(use_thermal_1d),

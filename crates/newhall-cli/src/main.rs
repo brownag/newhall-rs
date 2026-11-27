@@ -737,7 +737,7 @@ fn run_bench(n: usize) {
     black_box(&out_t1d);
     report("Thermal1D + ClassicHydro", t2.elapsed().as_secs_f64());
 
-    // 4. Full Phase 4 (rayon SoA)
+    // 4. Full Hydrothermal (rayon SoA)
     let p4_engine = SimEngine::new(
         Thermal1DModel::new(Thermal1DConfig::default()),
         ThornthwaiteForcing,
@@ -746,7 +746,7 @@ fn run_bench(n: usize) {
     let t3 = Instant::now();
     let out_p4 = p4_engine.run_batch_soa(&batch, &cfg);
     black_box(&out_p4);
-    report("Full Phase 4 (rayon)", t3.elapsed().as_secs_f64());
+    report("Full Hydrothermal (rayon)", t3.elapsed().as_secs_f64());
 
     // 5. Single-thread per-stage breakdown on 1,000 sites
     let k = n.min(1000);

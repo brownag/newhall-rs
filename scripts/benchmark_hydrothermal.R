@@ -23,8 +23,8 @@ out_classic <- newhall_batch(lat, lon, temp, precip, awc, elev)
 dt_classic <- proc.time()[["elapsed"]] - t0
 
 t1 <- proc.time()[["elapsed"]]
-out_p4 <- newhall_batch_phase4(lat, lon, temp, precip, awc, elev)
+out_p4 <- newhall_batch_hydrothermal(lat, lon, temp, precip, awc, elev)
 dt_p4 <- proc.time()[["elapsed"]] - t1
 
-cat(sprintf("Classic mode : %d sims in %.3f s (%.0f sims/sec)\n", n, dt_classic, n / dt_classic))
-cat(sprintf("Phase 4 mode : %d sims in %.3f s (%.0f sims/sec)\n", n, dt_p4, n / dt_p4))
+cat(sprintf("Classic mode      : %d sims in %.3f s (%.0f sims/sec)\n", n, dt_classic, n / dt_classic))
+cat(sprintf("Hydrothermal mode : %d sims in %.3f s (%.0f sims/sec)\n", n, dt_p4, n / dt_p4))

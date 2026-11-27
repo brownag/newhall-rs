@@ -21,7 +21,7 @@ fn int_slice_mut(vec: &mut Integers) -> &mut [i32] {
         .expect("Integers must expose a mutable integer slice")
 }
 
-fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
+fn outputs_to_r_list(outputs: &[SiteOutput], include_hydrothermal: bool) -> List {
     let n = outputs.len();
     let mut annual_rainfall = Doubles::new(n);
     let mut water_holding_capacity = Doubles::new(n);
@@ -42,7 +42,7 @@ fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
     let mut smr_code = Integers::new(n);
     let mut sub1_code = Integers::new(n);
     let mut sub2_code = Integers::new(n);
-    let mut phase4 = include_phase4.then(|| (Integers::new(n), Integers::new(n)));
+    let mut hydrothermal = include_hydrothermal.then(|| (Integers::new(n), Integers::new(n)));
 
     {
         let annual_rainfall_s = real_slice_mut(&mut annual_rainfall);
@@ -64,7 +64,7 @@ fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
         let smr_code_s = int_slice_mut(&mut smr_code);
         let sub1_code_s = int_slice_mut(&mut sub1_code);
         let sub2_code_s = int_slice_mut(&mut sub2_code);
-        let mut phase4_s = phase4
+        let mut hydrothermal_s = hydrothermal
             .as_mut()
             .map(|(sat, aquic)| (int_slice_mut(sat), int_slice_mut(aquic)));
 
@@ -89,7 +89,7 @@ fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
             smr_code_s[i] = o.moisture_regime as i32;
             sub1_code_s[i] = o.regime_subdivision1 as i32;
             sub2_code_s[i] = o.regime_subdivision2 as i32;
-            if let Some((sat_s, aquic_s)) = &mut phase4_s {
+            if let Some((sat_s, aquic_s)) = &mut hydrothermal_s {
                 sat_s[i] = o.sat_days_mcs;
                 aquic_s[i] = o.aquic_bio_days;
             }
@@ -97,7 +97,7 @@ fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
     }
 
     let mut pairs: Vec<(&'static str, Robj)> =
-        Vec::with_capacity(if include_phase4 { 21 } else { 19 });
+        Vec::with_capacity(if include_hydrothermal { 21 } else { 19 });
     pairs.extend([
         ("annualRainfall", annual_rainfall.into()),
         ("waterHoldingCapacity", water_holding_capacity.into()),
@@ -122,7 +122,7 @@ fn outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List {
         ("regimeSubdivision1", sub1_code.into()),
         ("regimeSubdivision2", sub2_code.into()),
     ]);
-    if let Some((sat_days_mcs, aquic_bio_days)) = phase4 {
+    if let Some((sat_days_mcs, aquic_bio_days)) = hydrothermal {
         pairs.push(("satDaysMcs", sat_days_mcs.into()));
         pairs.push(("aquicBioDays", aquic_bio_days.into()));
     }
@@ -296,7 +296,7 @@ fn newhall_batch_rust(
     Ok(outputs_to_r_list(&outputs, false))
 }
 
-fn run_phase4_with_forcing<F: ForcingModel>(
+fn run_hydrothermal_with_forcing<F: ForcingModel>(
     forcing: F,
     use_thermal_1d: bool,
     use_water_table: bool,
@@ -321,10 +321,10 @@ fn run_phase4_with_forcing<F: ForcingModel>(
     }
 }
 
-/// Phase 4 vectorized batch runner supporting `Thermal1DModel` and `WaterTableHydrology`.
+/// Hydrothermal vectorized batch runner supporting `Thermal1DModel` and `WaterTableHydrology`.
 #[extendr]
 #[allow(clippy::too_many_arguments)]
-fn newhall_batch_phase4_rust(
+fn newhall_batch_hydrothermal_rust(
     lat: &[f64],
     lon: &[f64],
     temp_flat: &[f64],
@@ -365,7 +365,7 @@ fn newhall_batch_phase4_rust(
         || z_wt.len() != n
     {
         return Err(Error::Other(
-            "Phase 4 input slice lengths do not match n (or 12*n for monthly slices)".into(),
+            "Hydrothermal input slice lengths do not match n (or 12*n for monthly slices)".into(),
         ));
     }
     if n == 0 {
@@ -421,7 +421,7 @@ fn newhall_batch_phase4_rust(
             };
 
             if strict_forcing {
-                run_phase4_with_forcing(
+                run_hydrothermal_with_forcing(
                     StrictThornthwaiteForcing,
                     use_thermal_1d,
                     use_water_table,
@@ -431,7 +431,7 @@ fn newhall_batch_phase4_rust(
                     &cfg,
                 )
             } else {
-                run_phase4_with_forcing(
+                run_hydrothermal_with_forcing(
                     ThornthwaiteForcing,
                     use_thermal_1d,
                     use_water_table,
@@ -450,5 +450,5 @@ fn newhall_batch_phase4_rust(
 extendr_module! {
     mod newhallrs;
     fn newhall_batch_rust;
-    fn newhall_batch_phase4_rust;
+    fn newhall_batch_hydrothermal_rust;
 }

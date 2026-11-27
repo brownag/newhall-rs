@@ -20,7 +20,7 @@ test_that("classic newhall_batch runs and matches expected columns", {
   expect_equal(out$temperatureRegime[1], 3L) # Mesic
 })
 
-test_that("phase4 1D thermal snow insulation warms cold winter soil", {
+test_that("hydrothermal 1D thermal snow insulation warms cold winter soil", {
   temp <- matrix(
     c(-15, -12, -4, 4, 11, 16, 19, 18, 12, 5, -5, -13),
     nrow = 2, ncol = 12, byrow = TRUE
@@ -30,7 +30,7 @@ test_that("phase4 1D thermal snow insulation warms cold winter soil", {
     rep(0.0, 12),
     c(0.8, 0.8, 0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.4, 0.7)
   )
-  out <- newhall_batch_phase4(
+  out <- newhall_batch_hydrothermal(
     lat = c(48.0, 48.0),
     lon = c(-110.0, -110.0),
     temp = temp,
@@ -46,13 +46,13 @@ test_that("phase4 1D thermal snow insulation warms cold winter soil", {
   expect_false(any(is.na(out$temperatureRegime)))
 })
 
-test_that("phase4 shallow water table reduces dry days and records satDaysMcs", {
+test_that("hydrothermal shallow water table reduces dry days and records satDaysMcs", {
   temp <- matrix(
     c(2, 5, 9, 14, 19, 25, 28, 27, 22, 15, 8, 3),
     nrow = 2, ncol = 12, byrow = TRUE
   )
   precip <- matrix(15.0, nrow = 2, ncol = 12)
-  out <- newhall_batch_phase4(
+  out <- newhall_batch_hydrothermal(
     lat = c(35.0, 35.0),
     lon = c(-110.0, -110.0),
     temp = temp,
@@ -68,10 +68,10 @@ test_that("phase4 shallow water table reduces dry days and records satDaysMcs", 
   expect_true(out$aquicBioDays[2] > 0L)
 })
 
-test_that("phase4 prognostic water table mode executes cleanly", {
+test_that("hydrothermal prognostic water table mode executes cleanly", {
   temp <- matrix(12.0, nrow = 3, ncol = 12)
   precip <- matrix(100.0, nrow = 3, ncol = 12)
-  out <- newhall_batch_phase4(
+  out <- newhall_batch_hydrothermal(
     lat = rep(42.0, 3),
     lon = rep(-85.0, 3),
     temp = temp,
@@ -146,7 +146,7 @@ test_that("newhall_batch strict = TRUE fixes Southern Hemisphere PET and imperia
   expect_equal(strict_imp$moistureRegime, strict_sh$moistureRegime)
 })
 
-test_that("newhall_batch_phase4 strict_forcing = TRUE remediates SH forcing", {
+test_that("newhall_batch_hydrothermal strict_forcing = TRUE remediates SH forcing", {
   temp_c <- matrix(
     c(22.1, 22.0, 20.9, 18.2, 15.2, 12.8, 12.0, 13.1, 15.3, 17.6, 19.4, 21.1),
     nrow = 1, ncol = 12
@@ -156,7 +156,7 @@ test_that("newhall_batch_phase4 strict_forcing = TRUE remediates SH forcing", {
     nrow = 1, ncol = 12
   )
 
-  p4_strict <- newhall_batch_phase4(
+  p4_strict <- newhall_batch_hydrothermal(
     lat = -33.8688,
     lon = 151.2093,
     temp = temp_c,
@@ -164,7 +164,7 @@ test_that("newhall_batch_phase4 strict_forcing = TRUE remediates SH forcing", {
     awc = 200.0,
     strict_forcing = TRUE
   )
-  p4_classic_forcing <- newhall_batch_phase4(
+  p4_classic_forcing <- newhall_batch_hydrothermal(
     lat = -33.8688,
     lon = 151.2093,
     temp = temp_c,

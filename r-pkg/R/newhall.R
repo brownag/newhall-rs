@@ -145,7 +145,7 @@ newhall_batch.character <- function(.data, ...) {
   newhall_batch.data.frame(df, ...)
 }
 
-.extract_phase4_vec <- function(df, col_name, default_val, n) {
+.extract_hydrothermal_vec <- function(df, col_name, default_val, n) {
   val <- .extract_optional_col(df, col_name, default_val, as.double)
   if (length(val) == 1L && n != 1L) {
     rep(val, n)
@@ -154,7 +154,7 @@ newhall_batch.character <- function(.data, ...) {
   }
 }
 
-.extract_phase4_snow <- function(df, n) {
+.extract_hydrothermal_snow <- function(df, n) {
   snow_cols <- paste0("snow", month.abb)
   present <- snow_cols %in% names(df)
   if (all(present)) {
@@ -172,9 +172,9 @@ newhall_batch.character <- function(.data, ...) {
   matrix(0.0, nrow = n, ncol = 12L)
 }
 
-#' Run Phase 4 Newhall Simulation with 1D Thermal and Water-Table Physics
+#' Run Hydrothermal Newhall Simulation with 1D Thermal and Water-Table Physics
 #'
-#' Generic Phase 4 batch entry point supporting vector/matrix inputs
+#' Generic hydrothermal batch entry point supporting vector/matrix inputs
 #' (`default`), character vectors of CSV file paths (`character`), `data.frame`
 #' inputs (with optional `oHorizonThickness`, `bulkDensity`, `quartzFraction`,
 #' `porosity`, `zWt`, and `snowJan`..`snowDec` columns), and `terra`
@@ -225,18 +225,19 @@ newhall_batch.character <- function(.data, ...) {
 #'   `quartzFraction` column.
 #' @param porosity Default soil porosity used when `.data` lacks a `porosity` column.
 #' @param zWt Default water-table depth (m) used when `.data` lacks a `zWt` column.
-#' @return A `data.frame` of Newhall simulation outputs including `satDaysMcs` and
-#'   `aquicBioDays` (`newhall_batch_phase4_raw()` and `newhall_batch_phase4.default()`
-#'   return integer regime codes; `newhall_batch_phase4.data.frame()` returns
-#'   decoded character regime names).
+#' @return A `data.frame` of Newhall simulation outputs including `satDaysMcs`
+#'   and `aquicBioDays`. `newhall_batch_hydrothermal_raw()` and
+#'   `newhall_batch_hydrothermal.default()` return integer regime codes;
+#'   `newhall_batch_hydrothermal.data.frame()` returns decoded character regime
+#'   names.
 #' @export
-newhall_batch_phase4 <- function(.data, ...) {
-  UseMethod("newhall_batch_phase4")
+newhall_batch_hydrothermal <- function(.data, ...) {
+  UseMethod("newhall_batch_hydrothermal")
 }
 
-#' @rdname newhall_batch_phase4
+#' @rdname newhall_batch_hydrothermal
 #' @export
-newhall_batch_phase4_raw <- function(
+newhall_batch_hydrothermal_raw <- function(
     lat,
     lon,
     temp,
@@ -266,7 +267,7 @@ newhall_batch_phase4_raw <- function(
   temp_mat <- as.matrix(temp)
   precip_mat <- as.matrix(precip)
   snow_mat <- as.matrix(snow_depth)
-  res <- newhall_batch_phase4_rust(
+  res <- newhall_batch_hydrothermal_rust(
     as.double(lat),
     as.double(lon),
     as.double(temp_mat),
@@ -296,21 +297,21 @@ newhall_batch_phase4_raw <- function(
   as.data.frame(res, stringsAsFactors = FALSE)
 }
 
-#' @rdname newhall_batch_phase4
-#' @method newhall_batch_phase4 default
+#' @rdname newhall_batch_hydrothermal
+#' @method newhall_batch_hydrothermal default
 #' @export
-newhall_batch_phase4.default <- function(.data = NULL, ...) {
+newhall_batch_hydrothermal.default <- function(.data = NULL, ...) {
   if (is.null(.data)) {
-    newhall_batch_phase4_raw(...)
+    newhall_batch_hydrothermal_raw(...)
   } else {
-    newhall_batch_phase4_raw(.data, ...)
+    newhall_batch_hydrothermal_raw(.data, ...)
   }
 }
 
-#' @rdname newhall_batch_phase4
-#' @method newhall_batch_phase4 data.frame
+#' @rdname newhall_batch_hydrothermal
+#' @method newhall_batch_hydrothermal data.frame
 #' @export
-newhall_batch_phase4.data.frame <- function(
+newhall_batch_hydrothermal.data.frame <- function(
     .data,
     soilAirOffset = 2.5,
     amplitude = 0.66,
@@ -340,19 +341,19 @@ newhall_batch_phase4.data.frame <- function(
     isSaturated = isSaturated
   )
   n <- nrow(.data)
-  res <- newhall_batch_phase4_raw(
+  res <- newhall_batch_hydrothermal_raw(
     lat = inputs$lat,
     lon = inputs$lon,
     temp = inputs$temp,
     precip = inputs$precip,
     awc = inputs$awc,
     elev = inputs$elev,
-    snow_depth = .extract_phase4_snow(.data, n),
-    o_horizon_thickness = .extract_phase4_vec(.data, "oHorizonThickness", oHorizonThickness, n),
-    bulk_density = .extract_phase4_vec(.data, "bulkDensity", bulkDensity, n),
-    quartz_fraction = .extract_phase4_vec(.data, "quartzFraction", quartzFraction, n),
-    porosity = .extract_phase4_vec(.data, "porosity", porosity, n),
-    z_wt = .extract_phase4_vec(.data, "zWt", zWt, n),
+    snow_depth = .extract_hydrothermal_snow(.data, n),
+    o_horizon_thickness = .extract_hydrothermal_vec(.data, "oHorizonThickness", oHorizonThickness, n),
+    bulk_density = .extract_hydrothermal_vec(.data, "bulkDensity", bulkDensity, n),
+    quartz_fraction = .extract_hydrothermal_vec(.data, "quartzFraction", quartzFraction, n),
+    porosity = .extract_hydrothermal_vec(.data, "porosity", porosity, n),
+    z_wt = .extract_hydrothermal_vec(.data, "zWt", zWt, n),
     use_thermal_1d = use_thermal_1d,
     use_water_table = use_water_table,
     use_prognostic_wt = use_prognostic_wt,
@@ -370,10 +371,10 @@ newhall_batch_phase4.data.frame <- function(
   .decode_regimes(res)
 }
 
-#' @rdname newhall_batch_phase4
-#' @method newhall_batch_phase4 character
+#' @rdname newhall_batch_hydrothermal
+#' @method newhall_batch_hydrothermal character
 #' @export
-newhall_batch_phase4.character <- function(.data, ...) {
+newhall_batch_hydrothermal.character <- function(.data, ...) {
   if (length(.data) == 0L) {
     stop("'.data' must contain at least one CSV file path.", call. = FALSE)
   }
@@ -389,5 +390,5 @@ newhall_batch_phase4.character <- function(.data, ...) {
   }
   dfs <- lapply(.data, utils::read.csv, stringsAsFactors = FALSE)
   df <- if (length(dfs) == 1L) dfs[[1L]] else do.call(rbind, dfs)
-  newhall_batch_phase4.data.frame(df, ...)
+  newhall_batch_hydrothermal.data.frame(df, ...)
 }

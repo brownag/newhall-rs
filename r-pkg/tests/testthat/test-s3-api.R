@@ -50,7 +50,7 @@ make_s3_test_raster <- function(df, nrow = 5L, ncol = 2L) {
   r
 }
 
-expected_output_names <- function(include_phase4 = FALSE) {
+expected_output_names <- function(include_hydrothermal = FALSE) {
   base <- c(
     "annualRainfall",
     "waterHoldingCapacity",
@@ -72,7 +72,7 @@ expected_output_names <- function(include_phase4 = FALSE) {
     "regimeSubdivision1",
     "regimeSubdivision2"
   )
-  if (include_phase4) c(base, "satDaysMcs", "aquicBioDays") else base
+  if (include_hydrothermal) c(base, "satDaysMcs", "aquicBioDays") else base
 }
 
 test_that("newhall_batch.data.frame returns 19 columns with decoded regimes matching raw", {
@@ -250,7 +250,7 @@ test_that("newhall_batch.character reads single and multiple CSV file paths", {
   expect_error(newhall_batch(tempfile(fileext = ".csv")), "not found")
 })
 
-test_that("newhall_batch_phase4.character reads single and multiple CSV file paths", {
+test_that("newhall_batch_hydrothermal.character reads single and multiple CSV file paths", {
   df <- make_s3_test_df()
   df$zWt <- c(0.3, 100.0, 100.0, 100.0)
   df$oHorizonThickness <- c(0.0, 0.0, 0.12, 0.0)
@@ -265,19 +265,19 @@ test_that("newhall_batch_phase4.character reads single and multiple CSV file pat
   utils::write.csv(df[1:2, , drop = FALSE], tmp1, row.names = FALSE)
   utils::write.csv(df[3:4, , drop = FALSE], tmp2, row.names = FALSE)
 
-  res_single <- newhall_batch_phase4(tmp1)
-  expect_equal(res_single, newhall_batch_phase4(df[1:2, , drop = FALSE]))
+  res_single <- newhall_batch_hydrothermal(tmp1)
+  expect_equal(res_single, newhall_batch_hydrothermal(df[1:2, , drop = FALSE]))
 
-  res_multi <- newhall_batch_phase4(c(tmp1, tmp2))
-  expect_equal(res_multi, newhall_batch_phase4(df))
-  expect_equal(names(res_multi), expected_output_names(include_phase4 = TRUE))
+  res_multi <- newhall_batch_hydrothermal(c(tmp1, tmp2))
+  expect_equal(res_multi, newhall_batch_hydrothermal(df))
+  expect_equal(names(res_multi), expected_output_names(include_hydrothermal = TRUE))
   expect_type(res_multi$temperatureRegime, "character")
   expect_type(res_multi$moistureRegime, "character")
 
-  expect_error(newhall_batch_phase4(character(0)), "at least one CSV")
-  expect_error(newhall_batch_phase4(NA_character_), "cannot be NA or empty")
-  expect_error(newhall_batch_phase4(""), "cannot be NA or empty")
-  expect_error(newhall_batch_phase4(tempfile(fileext = ".csv")), "not found")
+  expect_error(newhall_batch_hydrothermal(character(0)), "at least one CSV")
+  expect_error(newhall_batch_hydrothermal(NA_character_), "cannot be NA or empty")
+  expect_error(newhall_batch_hydrothermal(""), "cannot be NA or empty")
+  expect_error(newhall_batch_hydrothermal(tempfile(fileext = ".csv")), "not found")
 })
 
 test_that("newhall_batch.SpatRaster handles NA cells, multi-block chunking, cats, and strict mode", {
@@ -384,7 +384,7 @@ test_that("newhall_batch.SpatRaster handles NA cells, multi-block chunking, cats
   expect_equal(terra::nlyr(out_tif), 19L)
 })
 
-test_that("newhall_batch_phase4 works on data.frame and SpatRaster with 21 layers and cats", {
+test_that("newhall_batch_hydrothermal works on data.frame and SpatRaster with 21 layers and cats", {
   df <- make_s3_test_df()
   df_p4 <- df
   df_p4$zWt <- c(0.3, 100.0, 100.0, 100.0)
@@ -396,11 +396,11 @@ test_that("newhall_batch_phase4 works on data.frame and SpatRaster with 21 layer
   df_p4$snowFeb[3] <- 0.8
   df_p4$snowDec[3] <- 0.7
 
-  res_p4_df <- newhall_batch_phase4(df_p4)
+  res_p4_df <- newhall_batch_hydrothermal(df_p4)
   expect_s3_class(res_p4_df, "data.frame")
   expect_equal(nrow(res_p4_df), nrow(df_p4))
   expect_equal(ncol(res_p4_df), 21L)
-  expect_equal(names(res_p4_df), expected_output_names(include_phase4 = TRUE))
+  expect_equal(names(res_p4_df), expected_output_names(include_hydrothermal = TRUE))
   expect_type(res_p4_df$temperatureRegime, "character")
   expect_type(res_p4_df$moistureRegime, "character")
   expect_equal(res_p4_df$satDaysMcs[4], 0L)
@@ -411,10 +411,10 @@ test_that("newhall_batch_phase4 works on data.frame and SpatRaster with 21 layer
   r_p4_in <- make_s3_test_raster(df_p4, nrow = 4L, ncol = 2L)
   r_p4_in[["awc"]][2L] <- NA_real_
 
-  out_p4_rast <- newhall_batch_phase4(r_p4_in, nrows = 2L)
+  out_p4_rast <- newhall_batch_hydrothermal(r_p4_in, nrows = 2L)
   expect_s4_class(out_p4_rast, "SpatRaster")
   expect_equal(terra::nlyr(out_p4_rast), 21L)
-  expect_equal(names(out_p4_rast), expected_output_names(include_phase4 = TRUE))
+  expect_equal(names(out_p4_rast), expected_output_names(include_hydrothermal = TRUE))
   expect_equal(
     unname(terra::is.factor(out_p4_rast)),
     c(rep(FALSE, 15L), rep(TRUE, 4L), FALSE, FALSE)

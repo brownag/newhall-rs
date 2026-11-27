@@ -13,8 +13,8 @@ library(newhallrs)
 ```
 
 This vignette shows the main ways to run the Newhall simulation: from a
-data frame, from CSV files, in strict mode, with the Phase 4 physics, and on a
-`terra::SpatRaster`.
+data frame, from CSV files, in strict mode, with the hydrothermal model, and
+on a `terra::SpatRaster`.
 
 ## Input data
 
@@ -74,17 +74,17 @@ res_csv <- newhall_batch(c(csv1, csv2))
 all.equal(res_csv, res)
 ```
 
-`newhall_batch_phase4()` accepts paths too. Phase 4 CSVs can also carry
-monthly snow depth columns (`snowJan` to `snowDec`, m).
+`newhall_batch_hydrothermal()` accepts paths too. Hydrothermal CSVs can also
+carry monthly snow depth columns (`snowJan` to `snowDec`, m).
 
-```{r csv-phase4}
+```{r csv-hydrothermal}
 df4 <- df
 for (m in month.abb) df4[[paste0("snow", m)]] <- 0
 df4$snowJan[3] <- 0.8
 
 csv4 <- tempfile(fileext = ".csv")
 utils::write.csv(df4, csv4, row.names = FALSE)
-res4_csv <- newhall_batch_phase4(csv4)
+res4_csv <- newhall_batch_hydrothermal(csv4)
 res4_csv[, c("temperatureRegime", "moistureRegime")]
 unlink(c(csv1, csv2, csv4))
 ```
@@ -110,17 +110,17 @@ identical(res[regime_cols], res_strict[regime_cols])
 
 The last line shows whether strict mode changed any regime for these sites.
 
-## 4. Phase 4 workflow
+## 4. Hydrothermal workflow
 
-`newhall_batch_phase4()` adds 1D soil thermal and water-table physics. Site
-level parameters such as `zWt` (water-table depth, m) and
+`newhall_batch_hydrothermal()` adds 1D soil thermal and water-table physics.
+Site level parameters such as `zWt` (water-table depth, m) and
 `oHorizonThickness` (m) can be columns in the data frame.
 
-```{r phase4}
+```{r hydrothermal}
 df4$zWt <- c(0.3, 100, 100, 100)
 df4$oHorizonThickness <- c(0, 0, 0.12, 0)
 
-res4 <- newhall_batch_phase4(df4)
+res4 <- newhall_batch_hydrothermal(df4)
 setdiff(names(res4), names(res))
 res4[, c("temperatureRegime", "moistureRegime")]
 ```
@@ -155,8 +155,8 @@ terra::nlyr(out)
 names(out)
 ```
 
-```{r raster-phase4, eval = requireNamespace("terra", quietly = TRUE)}
-out4 <- newhall_batch_phase4(r, nrows = 2L)
+```{r raster-hydrothermal, eval = requireNamespace("terra", quietly = TRUE)}
+out4 <- newhall_batch_hydrothermal(r, nrows = 2L)
 terra::nlyr(out4)
 setdiff(names(out4), names(out))
 ```
