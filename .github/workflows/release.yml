@@ -80,7 +80,8 @@ jobs:
             (cd dist && 7z a "${name}.zip" "${name}.exe" >/dev/null && rm "${name}.exe")
           else
             cp target/release/newhall-cli "dist/${name}"
-            tar -C dist -czf "dist/${name}.tar.gz" "${name}" && rm "dist/${name}"
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+            rm "dist/${name}"
           fi
           ls -l dist
 
