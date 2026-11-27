@@ -1,5 +1,5 @@
 //! Adversarial validation, analytical benchmarks, stability torture tests,
-//! and 10,000+ case `proptest` fuzzing for Phase 4 physics extensions.
+//! and 10,000+ case `proptest` fuzzing for hydrothermal physics extensions.
 
 use std::f64::consts::TAU;
 

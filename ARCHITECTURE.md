@@ -26,12 +26,12 @@ newhall-rs/
 │   │   │   ├── forcing.rs         # ThornthwaiteForcing & StrictThornthwaiteForcing
 │   │   │   ├── hydrology.rs       # ClassicHydrology (8x8 soil moisture matrix & 360-day calendar)
 │   │   │   ├── thermal.rs         # ClassicThermal & StrictThermal (>5C/>8C solvers, STR/SMR classifiers)
-│   │   │   ├── thermal_1d.rs      # Phase 4 Thermal1DModel (16-node Backward Euler + Thomas solver)
-│   │   │   └── water_table.rs     # Phase 4 WaterTableHydrology (prescribed/prognostic WT + Gardner capillary)
+│   │   │   ├── thermal_1d.rs      # Hydrothermal Thermal1DModel (16-node Backward Euler + Thomas solver)
+│   │   │   └── water_table.rs     # Hydrothermal WaterTableHydrology (prescribed/prognostic WT + Gardner capillary)
 │   │   └── tests/
 │   │       ├── golden_master.rs   # Bit/1e-9 parity checks against jNSMR CSV fixtures
-│   │       ├── strict_mode.rs     # Defect #1-#10 remediation tests across ClassicNewhall/StrictNewhall/Phase 4
-│   │       ├── adversarial_phase4.rs # Conservation, Carslaw-Jaeger analytical, monotonicity, and proptest fuzzing
+│   │       ├── strict_mode.rs     # Defect #1-#10 remediation tests across ClassicNewhall/StrictNewhall/hydrothermal
+│   │       ├── adversarial_hydrothermal.rs # Conservation, Carslaw-Jaeger analytical, monotonicity, and proptest fuzzing
 │   │       └── fixtures/          # manifest.json, pa_batch_metric.csv, daymet_sample.csv, prism_sample.csv
 │   └── newhall-cli/               # Native Rust CLI & multi-stage throughput benchmark harness
 │       ├── Cargo.toml
@@ -40,7 +40,7 @@ newhall-rs/
 │   ├── DESCRIPTION                # SystemRequirements: Cargo; Suggests: jNSMR, terra, testthat
 │   ├── NAMESPACE                  # Exported functions and S3 method registrations
 │   ├── R/
-│   │   ├── newhall.R              # newhall_batch / newhall_batch_phase4 S3 generics & raw/default/df/char methods
+│   │   ├── newhall.R              # newhall_batch / newhall_batch_hydrothermal S3 generics & raw/default/df/char methods
 │   │   ├── raster.R               # Chunked terra::SpatRaster S3 methods and categorical table attachment
 │   │   ├── categories.R           # .str_levels/.smr_levels/.smrsub1_levels/.smrsub2_levels & schema helpers
 │   │   └── extendr-wrappers.R     # Auto-generated .Call() wrappers for wrap__newhall_batch*_rust
@@ -52,13 +52,13 @@ newhall-rs/
 │   │       ├── src/lib.rs         # Zero-intermediate-Vec R bridge (`outputs_to_r_list`)
 │   │       └── newhall-core/      # Vendored copy of crates/newhall-core (managed via sync-core.sh)
 │   ├── tools/sync-core.sh         # Copies crates/newhall-core/{Cargo.toml,src} into r-pkg/src/rust/newhall-core/
-│   ├── tests/testthat/            # test-jnsmr-parity.R, test-phase4.R, test-s3-api.R
+│   ├── tests/testthat/            # test-jnsmr-parity.R, test-hydrothermal.R, test-s3-api.R
 │   └── inst/benchmarks/bench_jnsmr.R
 ├── planning/                      # Audits, physics specs, execution plans, state logs, benchmarks
 │   ├── AUDIT_JNSM.md              # jNSMR v0.3.1 / newhall-1.6.5.jar parity & Defect #1-#11 audit
 │   ├── PHASE4_PHYSICS_SPEC.md     # 1D thermal & water-table mathematical specification
 │   └── ADVERSARIAL_VALIDATION.md  # Invariant & analytical validation specification
-└── scripts/                       # Helper R scripts (benchmark_phase4.R, generate_golden_fixtures.R)
+└── scripts/                       # Helper R scripts (benchmark_hydrothermal.R, generate_golden_fixtures.R)
 ```
 
 ---
@@ -87,7 +87,7 @@ Simulation physics are decomposed into three independent traits combined by `Sim
 
 - `ForcingModel`: computes monthly adjusted PET (`WaterBalance::mpe`), `annual_rainfall`, `annual_pet`, `annual_water_balance`, and `summer_water_balance`.
 - `HydrologyStep`: equilibrates the 8×8 soil moisture matrix and emits `SoilState` (final 64-slot profile, 360-day moisture calendar `iday`, cumulative day totals `nd`, MCS saturation days `sat_days_mcs`, and half-monthly water-table depth `z_wt_daily`).
-- `ThermalModel`: evaluates Soil Temperature Regime (STR), `>5°C` and `>8°C` growing-season day counters (`DayCounters`), Soil Moisture Regime (SMR) and subdivisions, plus Phase 4 `aquic_bio_days` into `ThermalClassification`.
+- `ThermalModel`: evaluates Soil Temperature Regime (STR), `>5°C` and `>8°C` growing-season day counters (`DayCounters`), Soil Moisture Regime (SMR) and subdivisions, plus hydrothermal `aquic_bio_days` into `ThermalClassification`.
 - `SimEngine<T, F, H>`:
   - `SimEngine::new(thermal, forcing, hydrology)` constructs any static combination.
   - `SimEngine::run(&self, input: &SiteInput, config: &SiteConfig) -> SiteOutput` executes all three stages strictly on the stack with zero heap allocations.
@@ -149,9 +149,9 @@ Opt-in model family remediating the audited `jNSMR` defects documented in `plann
 - **Defect `#9` (`StrictThornthwaiteForcing`, `StrictThermal`):** propagates `NaN` in climate/thermal inputs to `MoistureRegime::Undefined` and `temperature_regime = None` instead of `Perudic`.
 - **Defect `#10` (`StrictThermal`):** detects threshold crossings cleanly without `5.0 -> 5.01` or `8.0 -> 8.01` perturbations.
 
-### 3.3 Phase 4 Physics (`Thermal1DModel` & `WaterTableHydrology`)
+### 3.3 Hydrothermal Physics (`Thermal1DModel` & `WaterTableHydrology`)
 
-Phase 4 traits implement physically based vertical heat conduction and fluctuating water-table coupling (`planning/PHASE4_PHYSICS_SPEC.md`) and compose cleanly with either `ThornthwaiteForcing` or `StrictThornthwaiteForcing`:
+Hydrothermal traits implement physically based vertical heat conduction and fluctuating water-table coupling (`planning/PHASE4_PHYSICS_SPEC.md`) and compose cleanly with either `ThornthwaiteForcing` or `StrictThornthwaiteForcing`:
 
 - `Thermal1DModel` (`crates/newhall-core/src/thermal_1d.rs`):
   - Configured by `Thermal1DConfig` (`porosity`, `bulk_density_kg_m3`, `quartz_fraction`, `organic_fraction`, `o_horizon_thickness_m`, `o_horizon_conductivity`, `snow_depth_m`, `snow_conductivity`, `convective_hc`, `texture: SoilTextureClass`, `fixed_theta_tot`, `max_spinup_years`).
@@ -170,9 +170,9 @@ Phase 4 traits implement physically based vertical heat conduction and fluctuati
 
 `r-pkg/src/rust/src/lib.rs` exports two `#[extendr]` entrypoints registered via `extendr_module! { mod newhallrs; ... }`:
 1. `newhall_batch_rust`: constructs a zero-copy `SoaBatchInput` view over R's column-major numeric vectors (`temp_flat`, `precip_flat` of length `12 * n`) and dispatches to `ClassicNewhall` or `StrictNewhall` (using `run_batch_soa` when soil configs are scalar, or `rayon` `run_per_site_soa` when per-site vectors are supplied).
-2. `newhall_batch_phase4_rust`: runs `rayon` parallel per-site simulations via `run_phase4_with_forcing`, statically monomorphizing the 4 combinations of `(use_thermal_1d, use_water_table)` across `ThornthwaiteForcing` and `StrictThornthwaiteForcing`.
+2. `newhall_batch_hydrothermal_rust`: runs `rayon` parallel per-site simulations via `run_hydrothermal_with_forcing`, statically monomorphizing the 4 combinations of `(use_thermal_1d, use_water_table)` across `ThornthwaiteForcing` and `StrictThornthwaiteForcing`.
 
-To eliminate intermediate Rust `Vec` heap allocations on the R boundary, `outputs_to_r_list(outputs: &[SiteOutput], include_phase4: bool) -> List` allocates `extendr_api::Doubles::new(n)` and `extendr_api::Integers::new(n)` directly in R memory, acquires `&mut [f64]` / `&mut [i32]` slices via `real_slice_mut` / `int_slice_mut`, writes all 19 (or 21) output columns in a single pass (encoding `None` temperature regimes with `Rint::na().inner()`), and returns a named `List`.
+To eliminate intermediate Rust `Vec` heap allocations on the R boundary, `outputs_to_r_list(outputs: &[SiteOutput], include_hydrothermal: bool) -> List` allocates `extendr_api::Doubles::new(n)` and `extendr_api::Integers::new(n)` directly in R memory, acquires `&mut [f64]` / `&mut [i32]` slices via `real_slice_mut` / `int_slice_mut`, writes all 19 (or 21) output columns in a single pass (encoding `None` temperature regimes with `Rint::na().inner()`), and returns a named `List`.
 
 ### 4.2 Standalone Tarball Staging (`r-pkg/tools/sync-core.sh`)
 
@@ -185,8 +185,8 @@ R package source tarballs (`R CMD build` / `R CMD check`) cannot depend on works
   - `newhall_batch.data.frame`: validates required `jNSMR` columns via `.extract_df_inputs`, normalizes `unitSystem` via `.normalize_unit_system`, calls `newhall_batch_raw`, and decodes regime codes to strings via `.decode_regimes` (`r-pkg/R/categories.R`).
   - `newhall_batch.character`: reads one or more CSV paths with `utils::read.csv` and forwards to `newhall_batch.data.frame`.
   - `newhall_batch.SpatRaster`: streams chunked raster blocks via `.run_spatraster_chunks` (`terra::readValues` / `terra::writeValues`), skips `NA` cells (`is.na(awc)` in classic mode; any required `NA` when `strict = TRUE`), and attaches `terra::set.cats()` tables to layers 16–19 via `.attach_regime_cats`.
-- **`newhall_batch_phase4` (`r-pkg/R/newhall.R`, `r-pkg/R/raster.R`):**
-  - Dispatches `default` (`newhall_batch_phase4_raw`), `data.frame` (supporting optional `oHorizonThickness`, `bulkDensity`, `quartzFraction`, `porosity`, `zWt`, and `snowJan`..`snowDec` columns), and `SpatRaster` (21-layer output raster including `satDaysMcs` and `aquicBioDays`).
+- **`newhall_batch_hydrothermal` (`r-pkg/R/newhall.R`, `r-pkg/R/raster.R`):**
+  - Dispatches `default` (`newhall_batch_hydrothermal_raw`), `data.frame` (supporting optional `oHorizonThickness`, `bulkDensity`, `quartzFraction`, `porosity`, `zWt`, and `snowJan`..`snowDec` columns), and `SpatRaster` (21-layer output raster including `satDaysMcs` and `aquicBioDays`).
 
 ---
 
@@ -206,7 +206,7 @@ Follow these steps to add a new forcing, hydrology, or thermal model without dis
 ### Step 2: Write Unit, Adversarial, and Parity Tests
 
 1. **Module unit tests (`#[cfg(test)]`):** test edge cases (`f64::NAN`, `awc_mm == 0.0`, `is_metric = false`, extreme latitudes) inside your module.
-2. **Adversarial & property tests (`crates/newhall-core/tests/adversarial_phase4.rs` or a new integration test):**
+2. **Adversarial & property tests (`crates/newhall-core/tests/adversarial_hydrothermal.rs` or a new integration test):**
    - Verify physical conservation laws (e.g., mass or energy balance closure), analytical limits, and monotonicity under parameter sweeps.
    - Add `proptest!` cases verifying finite outputs, `num_cumulative_days_dry + num_cumulative_days_moist_dry + num_cumulative_days_moist == 360`, and deterministic `run` vs `run_batch_soa` equivalence.
 3. **Verify zero regression on `ClassicNewhall` and `StrictNewhall`:**

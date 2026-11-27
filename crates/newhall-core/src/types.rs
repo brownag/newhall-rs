@@ -447,7 +447,7 @@ pub struct ThermalClassification {
     pub aquic_bio_days: i32,
 }
 
-/// Complete simulation output matching `jNSMR::batch3()` plus Phase 4 diagnostics (`Copy`).
+/// Complete simulation output matching `jNSMR::batch3()` plus hydrothermal diagnostics (`Copy`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SiteOutput {
     /// Total annual precipitation (mm).

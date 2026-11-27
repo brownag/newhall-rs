@@ -3,7 +3,8 @@ Title: Fast Rust-Backed Newhall Soil Moisture and Temperature Regime Simulation
 Version: 0.1.0
 Authors@R: person("Andrew Gene", "Brown", email = "brown.andrewg@gmail.com", role = c("aut", "cre"))
 Description: Vectorized Newhall Simulation Model with classic jNSMR parity and
-    Phase 4 1D soil thermal and fluctuating water-table physics extensions.
+    an optional hydrothermal model (1D soil heat conduction coupled with a
+    fluctuating water table).
 License: MIT + file LICENSE
 URL: https://github.com/brownag/newhall-rs
 BugReports: https://github.com/brownag/newhall-rs/issues
@@ -12,8 +13,11 @@ Roxygen: list(markdown = TRUE)
 Imports:
     utils
 Suggests:
+    knitr,
+    rmarkdown,
     terra,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 SystemRequirements: Cargo (rustc >= 1.70)
 Config/rextendr/version: 0.5.0

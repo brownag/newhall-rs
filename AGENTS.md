@@ -13,7 +13,7 @@
 ## Find Things
 
 - `crates/newhall-core/src/` — pure-Rust physics, simulation engine, and public types.
-- `crates/newhall-core/tests/` — parity, strict-mode, and Phase 4 validation tests; `fixtures/` contains reference data.
+- `crates/newhall-core/tests/` — parity, strict-mode, and hydrothermal validation tests; `fixtures/` contains reference data.
 - `crates/newhall-cli/src/` — native CLI and benchmark harness.
 - `r-pkg/R/` — R API, raster methods, categories, and generated extendr wrappers.
 - `r-pkg/src/rust/src/` — Rust-to-R bridge; `r-pkg/src/rust/newhall-core/` is the vendored core copy.
@@ -28,7 +28,7 @@
 - Keep `crates/newhall-core` independent of R and extendr; it is the reusable physics library.
 - After changing the core, run `r-pkg/tools/sync-core.sh` to update the vendored copy before validating the R package.
 - Use `cargo test --workspace` for Rust changes and the testthat suite for R-facing changes.
-- Golden parity and Phase 4 invariants are specified in `ARCHITECTURE.md` and the relevant files under `planning/`.
+- Golden parity and hydrothermal invariants are specified in `ARCHITECTURE.md` and the relevant files under `planning/`.
 
 ## Infrastructure
 
@@ -39,5 +39,5 @@
 ## References
 
 - See `ARCHITECTURE.md` for module responsibilities, physics pipeline, and extension points.
-- See `planning/PHASE4_PHYSICS_SPEC.md` and `planning/ADVERSARIAL_VALIDATION.md` for Phase 4 behavior and validation requirements.
+- See `planning/PHASE4_PHYSICS_SPEC.md` and `planning/ADVERSARIAL_VALIDATION.md` for hydrothermal behavior and validation requirements.
 - See `planning/AUDIT_JNSM.md` for classic jNSMR parity context.

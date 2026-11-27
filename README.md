@@ -4,7 +4,7 @@
 
 - **Pure-Rust core (`crates/newhall-core`):** Stack-allocated `Copy` simulation state, zero-heap-allocation single-site execution, Struct-of-Arrays (`SoaBatchInput`) batch execution, optional `rayon` parallelism (`parallel` feature enabled by default), and zero R/`extendr` dependencies.
 - **Native CLI (`crates/newhall-cli`):** Batch CSV runner (`run`), `jNSMR` golden-parity verifier (`verify`), and throughput benchmark harness (`bench`).
-- **R package (`r-pkg` / `newhallrs`):** Vectorized S3 interfaces (`newhall_batch`, `newhall_batch_phase4`) over `data.frame`, CSV paths (`character`), raw vectors/matrices, and chunked `terra::SpatRaster` objects with direct R vector allocation and attached categorical tables.
+- **R package (`r-pkg` / `newhallrs`):** Vectorized S3 interfaces (`newhall_batch`, `newhall_batch_hydrothermal`) over `data.frame`, CSV paths (`character`), raw vectors/matrices, and chunked `terra::SpatRaster` objects with direct R vector allocation and attached categorical tables.
 
 See the [Architecture & Extension Guide](ARCHITECTURE.md) for module responsibilities, trait pipeline details, and instructions for adding new physics models.
 
@@ -18,7 +18,7 @@ Simulation physics compose three static-dispatch traits (`ForcingModel`, `Hydrol
    `SimEngine<ClassicThermal, ThornthwaiteForcing, ClassicHydrology>` reproduces `newhall-1.6.5.jar` (`BASICSimulationModel.runBatch2`) outputs verbatim, preserving legacy edge-case behaviors for drop-in compatibility with `jNSMR`.
 2. **`StrictNewhall` (Opt-in — Defect-Remediated Classic Physics):**
    `SimEngine<StrictThermal, StrictThornthwaiteForcing, StrictHydrology>` remediates audited `jNSMR` Defects `#1`–`#10` (documented in [planning/AUDIT_JNSM.md](planning/AUDIT_JNSM.md)), including Southern Hemisphere latitude/daylength interpolation, English-to-metric unit conversion when `!is_metric`, Pergelic vs. Frigid precedence, attenuated amplitude checks, multi-interval `>5°C` day accumulation, clean `5.0`/`8.0°C` threshold crossings, and `NaN` propagation to `Undefined` / `None`.
-3. **Phase 4 Physics (`Thermal1DModel` & `WaterTableHydrology`):**
+3. **Hydrothermal Physics (`Thermal1DModel` & `WaterTableHydrology`):**
    Physically based opt-in extensions specified in [planning/PHASE4_PHYSICS_SPEC.md](planning/PHASE4_PHYSICS_SPEC.md):
    - `Thermal1DModel`: 16-node geometrically stretched 1D vertical heat conduction (`0`–`5.0 m`) solved via implicit Backward Euler + tridiagonal Thomas solver with smoothed latent heat of fusion, Côté & Konrad (2005) thermal conductivity, snowpack and O-horizon series thermal resistance, `T(0.50 m)` regime evaluation, and `aquic_bio_days`.
    - `WaterTableHydrology`: maps the 8×8 soil moisture matrix onto `[0, z_prof_m]`, applies saturation floors and Gardner (1958) capillary rise across `PrescribedMonthly`, `PrescribedHarmonic`, and `Prognostic` water-table modes, and records `sat_days_mcs`.
@@ -56,14 +56,14 @@ fn main() {
     let strict = StrictNewhall::default().run(&input, &config);
     println!("Strict: {:?} / {:?}", strict.temperature_regime, strict.moisture_regime);
 
-    // 3. Opt-in Phase 4 physics (1D thermal + fluctuating water table)
-    let phase4_engine = SimEngine::new(
+    // 3. Opt-in hydrothermal physics (1D thermal + fluctuating water table)
+    let hydrothermal_engine = SimEngine::new(
         Thermal1DModel::default(),
         StrictThornthwaiteForcing,
         WaterTableHydrology::default(),
     );
-    let phase4 = phase4_engine.run(&input, &config);
-    println!("Phase 4 aquic_bio_days={}, sat_days_mcs={}", phase4.aquic_bio_days, phase4.sat_days_mcs);
+    let hydrothermal = hydrothermal_engine.run(&input, &config);
+    println!("Hydrothermal aquic_bio_days={}, sat_days_mcs={}", hydrothermal.aquic_bio_days, hydrothermal.sat_days_mcs);
 
     // 4. Parallel Struct-of-Arrays (SoA) batch execution
     let lat = [40.0, 35.0];
@@ -144,8 +144,8 @@ res_strict  <- newhall_batch(df, strict = TRUE)
 # CSV file paths are also accepted by newhall_batch()
 # res_csv <- newhall_batch("crates/newhall-core/tests/fixtures/pa_batch_metric.csv")
 
-# 2. Phase 4 simulation (1D thermal + fluctuating water table) on a data.frame
-res_phase4 <- newhall_batch_phase4(
+# 2. Hydrothermal simulation (1D thermal + fluctuating water table) on a data.frame
+res_hydrothermal <- newhall_batch_hydrothermal(
   df,
   oHorizonThickness = 0.05,
   bulkDensity = 1350,
@@ -154,14 +154,14 @@ res_phase4 <- newhall_batch_phase4(
   zWt = 0.75,
   texture = "medium"
 )
-res_phase4[, c("temperatureRegime", "moistureRegime", "satDaysMcs", "aquicBioDays")]
+res_hydrothermal[, c("temperatureRegime", "moistureRegime", "satDaysMcs", "aquicBioDays")]
 
 # 3. Chunked terra::SpatRaster processing (28 required layers; outputs 19 or 21 layers
 #    with 0-indexed categorical tables attached to layers 16-19 via terra::set.cats())
 if (requireNamespace("terra", quietly = TRUE) && requireNamespace("jNSMR", quietly = TRUE)) {
   r <- terra::rast(system.file("extdata", "daymet_issr800_sample.tif", package = "jNSMR"))
   out_classic <- newhall_batch(r, file = "")
-  out_phase4  <- newhall_batch_phase4(r, z_wt = 1.0, file = "")
+  out_hydrothermal  <- newhall_batch_hydrothermal(r, z_wt = 1.0, file = "")
 }
 ```
 
@@ -187,7 +187,7 @@ Sample GeoTIFFs (`113 x 168 x 28`, `18,984` total cells / `18,790` valid cells; 
 | `ClassicNewhall` (`rayon`) | `4,705,436` | `0.21 µs` | `0.0213 s` |
 | `WaterTable + ClassicThermal` | `3,075,353` | `0.33 µs` | `0.0325 s` |
 | `Thermal1D + ClassicHydro` | `10,146` | `98.56 µs` | `9.8564 s` |
-| Full Phase 4 (`rayon`) | `10,365` | `96.48 µs` | `9.6480 s` |
+| Full Hydrothermal (`rayon`) | `10,365` | `96.48 µs` | `9.6480 s` |
 
 ---
 
@@ -195,7 +195,7 @@ Sample GeoTIFFs (`113 x 168 x 28`, `18,984` total cells / `18,790` valid cells; 
 
 - [Architecture & Extension Guide](ARCHITECTURE.md)
 - [jNSMR Parity Audit](planning/AUDIT_JNSM.md)
-- [Phase 4 Physics Specification](planning/PHASE4_PHYSICS_SPEC.md)
+- [Hydrothermal Physics Specification](planning/PHASE4_PHYSICS_SPEC.md)
 - [Adversarial Validation Specification](planning/ADVERSARIAL_VALIDATION.md)
 - [Benchmark Report](planning/benchmarks/jnsmr_raster_benchmark.md)
 - [Changelog](CHANGELOG.md)

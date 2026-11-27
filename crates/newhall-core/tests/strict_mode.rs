@@ -1,6 +1,6 @@
 //! Integration regression tests for strict-mode remediation of audited `jNSMR` Defects #1–#10.
 //!
-//! Compares [`ClassicNewhall`], [`StrictNewhall`], and Phase 4
+//! Compares [`ClassicNewhall`], [`StrictNewhall`], and hydrothermal
 //! `SimEngine<Thermal1DModel, StrictThornthwaiteForcing, WaterTableHydrology>`.
 
 use newhall_core::{
@@ -21,7 +21,7 @@ fn make_site(lat_dd: f64, temp_c: [f64; 12], precip_mm: [f64; 12], awc_mm: f64) 
     }
 }
 
-fn phase4_strict_engine(
+fn hydrothermal_strict_engine(
 ) -> SimEngine<Thermal1DModel, StrictThornthwaiteForcing, WaterTableHydrology> {
     SimEngine::new(
         Thermal1DModel::new(Thermal1DConfig {
@@ -36,7 +36,7 @@ fn phase4_strict_engine(
     )
 }
 
-fn phase4_classic_forcing_engine(
+fn hydrothermal_classic_forcing_engine(
 ) -> SimEngine<Thermal1DModel, ThornthwaiteForcing, WaterTableHydrology> {
     SimEngine::new(
         Thermal1DModel::new(Thermal1DConfig {
@@ -67,8 +67,8 @@ fn defect_1_and_7_southern_hemisphere_pet_and_negative_lat() {
 
     let classic = ClassicNewhall::default();
     let strict = StrictNewhall::default();
-    let p4_classic = phase4_classic_forcing_engine();
-    let p4_strict = phase4_strict_engine();
+    let p4_classic = hydrothermal_classic_forcing_engine();
+    let p4_strict = hydrothermal_strict_engine();
 
     // Defect #1 + #7: At -12.5 deg S, ClassicNewhall hits the 0..5 SH branch with signed
     // negative lat_dd (-750 minutes), whereas StrictNewhall uses |lat_dd| = 12.5 and
@@ -132,7 +132,7 @@ fn defect_1_and_7_southern_hemisphere_pet_and_negative_lat() {
         );
     }
 
-    // Extreme negative latitude (-60.0) clamps to -50.0 in StrictNewhall / Phase 4 strict forcing,
+    // Extreme negative latitude (-60.0) clamps to -50.0 in StrictNewhall / hydrothermal strict forcing,
     // whereas ClassicNewhall keeps extrapolating negatively.
     let site_50 = make_site(-50.0, temps, precip, 200.0);
     let site_60 = make_site(-60.0, temps, precip, 200.0);
@@ -282,8 +282,8 @@ fn defect_2_is_metric_false_equivalence() {
         out_metric.regime_subdivision2
     );
 
-    // Phase 4 with StrictThornthwaiteForcing also converts forcing inputs when `is_metric = false`.
-    let p4_strict = phase4_strict_engine();
+    // Hydrothermal with StrictThornthwaiteForcing also converts forcing inputs when `is_metric = false`.
+    let p4_strict = hydrothermal_strict_engine();
     let p4_metric = p4_strict.run(&metric_site, &metric_cfg);
     let p4_imperial = p4_strict.run(&imperial_site, &imperial_cfg);
     assert_close(p4_imperial.annual_rainfall, p4_metric.annual_rainfall, 1e-9);
@@ -480,7 +480,7 @@ fn defect_6_bimodal_over_5c_accumulates_all_intervals() {
 fn defect_9_nan_handling_yields_undefined_not_perudic() {
     let classic = ClassicNewhall::default();
     let strict = StrictNewhall::default();
-    let p4_strict = phase4_strict_engine();
+    let p4_strict = hydrothermal_strict_engine();
     let cfg = SiteConfig::default();
 
     // NaN in precipitation on an otherwise very wet site:
@@ -497,7 +497,7 @@ fn defect_9_nan_handling_yields_undefined_not_perudic() {
     assert!(out_s.annual_rainfall.is_nan());
     assert!(out_s.annual_potential_evapotranspiration.is_nan());
 
-    // Phase 4 with StrictThornthwaiteForcing propagates NaN forcing cleanly without panicking.
+    // Hydrothermal with StrictThornthwaiteForcing propagates NaN forcing cleanly without panicking.
     let p4_nan_p = p4_strict.run(&nan_precip_site, &cfg);
     assert!(p4_nan_p.annual_rainfall.is_nan());
     assert!(p4_nan_p.annual_potential_evapotranspiration.is_nan());

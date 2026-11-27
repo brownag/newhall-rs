@@ -88,7 +88,10 @@ jobs:
             libudunits2-dev
 
       - name: Install R package dependencies
-        run: Rscript -e "install.packages(c('testthat', 'terra', 'devtools'))"
+        run: Rscript -e "install.packages(c('testthat', 'terra', 'devtools', 'knitr', 'rmarkdown'))"
+
+      - name: Set up pandoc
+        uses: r-lib/actions/setup-pandoc@v2
 
       - name: Build R source package
         run: R CMD build r-pkg

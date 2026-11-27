@@ -1,0 +1,162 @@
+---
+title: "newhall workflows"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{newhall workflows}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(newhallrs)
+```
+
+This vignette shows the main ways to run the Newhall simulation: from a
+data frame, from CSV files, in strict mode, with the hydrothermal model, and
+on a `terra::SpatRaster`.
+
+## Input data
+
+Each row is a site with latitude (`latDD`), longitude (`lonDD`), available
+water capacity (`awc`), elevation (`elev`), monthly mean temperature
+(`tJan` to `tDec`, deg C) and monthly precipitation (`pJan` to `pDec`, mm).
+
+```{r data}
+temps <- rbind(
+  c(-2.9, -1.7, 3.2, 9.4, 15.1, 19.9, 22.1, 21.3, 17.2, 10.9, 5.2, -0.3),
+  c(22.1, 22.0, 20.9, 18.2, 15.2, 12.8, 12.0, 13.1, 15.3, 17.6, 19.4, 21.1),
+  c(-3.5, -3.5, 2.0, 2.0, 2.0, 7.5, 7.5, 7.5, 2.0, 2.0, 2.0, -3.5),
+  c(9, 11, 15, 19, 24, 29, 31, 30, 26, 20, 14, 10)
+)
+precips <- rbind(
+  rep(85, 12),
+  c(102, 118, 130, 127, 120, 132, 97, 81, 69, 77, 84, 78),
+  rep(75, 12),
+  rep(8, 12)
+)
+colnames(temps) <- paste0("t", month.abb)
+colnames(precips) <- paste0("p", month.abb)
+
+df <- cbind(
+  data.frame(
+    latDD = c(40.8, -33.8688, 48.0, 33.4),
+    lonDD = c(-77.8, 151.2093, -110.0, -112.0),
+    awc = c(200, 200, 200, 150),
+    elev = c(350, 19, 1200, 330)
+  ),
+  as.data.frame(temps),
+  as.data.frame(precips)
+)
+```
+
+## 1. Tabular workflow
+
+`newhall_batch()` on a data frame returns one row of results per site.
+
+```{r tabular}
+res <- newhall_batch(df)
+res[, c("temperatureRegime", "moistureRegime")]
+```
+
+## 2. CSV workflow
+
+Pass one or more CSV paths. Files are read and row-bound, then run as above.
+Here we use temporary files.
+
+```{r csv}
+csv1 <- tempfile(fileext = ".csv")
+csv2 <- tempfile(fileext = ".csv")
+utils::write.csv(df[1:2, ], csv1, row.names = FALSE)
+utils::write.csv(df[3:4, ], csv2, row.names = FALSE)
+
+res_csv <- newhall_batch(c(csv1, csv2))
+all.equal(res_csv, res)
+```
+
+`newhall_batch_hydrothermal()` accepts paths too. Hydrothermal CSVs can also
+carry monthly snow depth columns (`snowJan` to `snowDec`, m).
+
+```{r csv-hydrothermal}
+df4 <- df
+for (m in month.abb) df4[[paste0("snow", m)]] <- 0
+df4$snowJan[3] <- 0.8
+
+csv4 <- tempfile(fileext = ".csv")
+utils::write.csv(df4, csv4, row.names = FALSE)
+res4_csv <- newhall_batch_hydrothermal(csv4)
+res4_csv[, c("temperatureRegime", "moistureRegime")]
+unlink(c(csv1, csv2, csv4))
+```
+
+## 3. Strict mode
+
+`strict = TRUE` uses the defect-remediated `StrictNewhall` physics instead of
+the classic jNSM-compatible `ClassicNewhall` model. Compare it with the
+default run on the regime columns.
+
+```{r strict}
+res_strict <- newhall_batch(df, strict = TRUE)
+regime_cols <- c("temperatureRegime", "moistureRegime")
+cmp <- data.frame(
+  default_temp = res$temperatureRegime,
+  strict_temp = res_strict$temperatureRegime,
+  default_moist = res$moistureRegime,
+  strict_moist = res_strict$moistureRegime
+)
+cmp
+identical(res[regime_cols], res_strict[regime_cols])
+```
+
+The last line shows whether strict mode changed any regime for these sites.
+
+## 4. Hydrothermal workflow
+
+`newhall_batch_hydrothermal()` adds 1D soil thermal and water-table physics.
+Site level parameters such as `zWt` (water-table depth, m) and
+`oHorizonThickness` (m) can be columns in the data frame.
+
+```{r hydrothermal}
+df4$zWt <- c(0.3, 100, 100, 100)
+df4$oHorizonThickness <- c(0, 0, 0.12, 0)
+
+res4 <- newhall_batch_hydrothermal(df4)
+setdiff(names(res4), names(res))
+res4[, c("temperatureRegime", "moistureRegime")]
+```
+
+## 5. Raster workflow
+
+With the `terra` package installed, a `SpatRaster` whose layers are named like
+the data frame columns can be run directly. The result is a raster with one
+layer per output column. These chunks are skipped when `terra` is not
+available.
+
+```{r raster-input, eval = requireNamespace("terra", quietly = TRUE)}
+nr <- 5L
+nc <- 2L
+idx <- rep(seq_len(nrow(df)), length.out = nr * nc)
+grid <- df[idx, ]
+layers <- lapply(names(grid), function(nm) {
+  terra::rast(
+    nrows = nr, ncols = nc,
+    xmin = -100, xmax = -98, ymin = 38, ymax = 40,
+    crs = "EPSG:4326", vals = grid[[nm]]
+  )
+})
+r <- terra::rast(layers)
+names(r) <- names(grid)
+r
+```
+
+```{r raster-classic, eval = requireNamespace("terra", quietly = TRUE)}
+out <- newhall_batch(r, nrows = 2L)
+terra::nlyr(out)
+names(out)
+```
+
+```{r raster-hydrothermal, eval = requireNamespace("terra", quietly = TRUE)}
+out4 <- newhall_batch_hydrothermal(r, nrows = 2L)
+terra::nlyr(out4)
+setdiff(names(out4), names(out))
+```
